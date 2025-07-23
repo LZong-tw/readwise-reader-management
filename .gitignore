@@ -1,2 +1,4 @@
 
 .readwise_token
+
+__pycache__/
