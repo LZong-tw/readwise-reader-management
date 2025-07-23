@@ -6,7 +6,7 @@ import json
 
 from config import Config
 from readwise_client import ReadwiseClient
-from document_manager import DocumentManager
+from document_manager import DocumentManager, safe_print
 from tag_manager import TagManager
 
 class ReadwiseCLI:
@@ -61,7 +61,7 @@ class ReadwiseCLI:
                 print(json.dumps(docs, ensure_ascii=False, indent=2))
             else:
                 for i, doc in enumerate(docs, 1):
-                    print(f"\n{i}. {doc.get('title', 'N/A')}")
+                    safe_print(f"\n{i}. {doc.get('title', 'N/A')}")
                     print(f"   ID: {doc.get('id')}")
                     print(f"   URL: {doc.get('source_url', doc.get('url', 'N/A'))}")
                     print(f"   Location: {doc.get('location', 'N/A')}")
@@ -86,7 +86,7 @@ class ReadwiseCLI:
                 return
             
             for i, doc in enumerate(docs, 1):
-                print(f"\n{i}. {doc.get('title', 'N/A')}")
+                safe_print(f"\n{i}. {doc.get('title', 'N/A')}")
                 print(f"   ID: {doc.get('id')}")
                 print(f"   URL: {doc.get('source_url', doc.get('url', 'N/A'))}")
                 

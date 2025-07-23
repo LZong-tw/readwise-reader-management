@@ -1,8 +1,28 @@
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import json
+import sys
+import os
 from readwise_client import ReadwiseClient
 from config import Config
+
+# Set console encoding for Windows
+if os.name == 'nt':
+    try:
+        import codecs
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'replace')
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'replace')
+    except:
+        pass
+
+def safe_print(text: str) -> None:
+    """Print text safely, handling encoding issues on Windows"""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        # Replace problematic characters with safe alternatives
+        safe_text = text.encode('utf-8', errors='replace').decode('utf-8')
+        print(safe_text)
 
 class DocumentManager:
     """Readwise document manager"""
@@ -13,7 +33,7 @@ class DocumentManager:
     def add_article(self, url: str, title: Optional[str] = None, 
                    tags: Optional[List[str]] = None, location: str = "new") -> Dict[str, Any]:
         """Add article"""
-        print(f"Adding article: {url}")
+        safe_print(f"Adding article: {url}")
         result = self.client.save_document(
             url=url,
             title=title,
@@ -21,14 +41,14 @@ class DocumentManager:
             location=location,
             category="article"
         )
-        print(f"Article added, ID: {result.get('id')}")
+        safe_print(f"Article added, ID: {result.get('id')}")
         return result
     
     def add_from_html(self, url: str, html: str, title: Optional[str] = None,
                      author: Optional[str] = None, tags: Optional[List[str]] = None,
                      clean_html: bool = True) -> Dict[str, Any]:
         """Add document from HTML content"""
-        print(f"Adding document from HTML: {title or url}")
+        safe_print(f"Adding document from HTML: {title or url}")
         result = self.client.save_document(
             url=url,
             html=html,
@@ -38,7 +58,7 @@ class DocumentManager:
             tags=tags,
             category="article"
         )
-        print(f"Document added, ID: {result.get('id')}")
+        safe_print(f"Document added, ID: {result.get('id')}")
         return result
     
     def get_documents(self, location: Optional[str] = None, 
@@ -46,34 +66,41 @@ class DocumentManager:
                      tags: Optional[List[str]] = None,
                      limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get document list"""
-        print("Getting document list...")
+        safe_print("Getting document list...")
         
-        if limit and limit <= 100:
-            # If limit is small, use single request
-            response = self.client.list_documents(
-                location=location,
-                category=category,
-                tags=tags
-            )
-            documents = response.get('results', [])
-            if limit:
-                documents = documents[:limit]
+        if limit:
+            if limit <= 100:
+                # Single API call is enough
+                safe_print(f"Fetching up to {limit} documents...")
+                response = self.client.list_documents(
+                    location=location,
+                    category=category,
+                    tags=tags
+                )
+                documents = response.get('results', [])[:limit]
+            else:
+                # Need multiple API calls but with a limit
+                print(f"Fetching up to {limit} documents (multiple requests needed)...")
+                documents = self.client.get_all_documents(
+                    location=location,
+                    category=category,
+                    max_documents=limit
+                )
         else:
-            # Get all documents
+            # No limit specified, get all documents with rate limiting
+            print("Fetching all documents (this may take a while with rate limiting)...")
             documents = self.client.get_all_documents(
                 location=location,
                 category=category
             )
-            if limit:
-                documents = documents[:limit]
         
-        print(f"Found {len(documents)} documents")
+        safe_print(f"Found {len(documents)} documents")
         return documents
     
     def search_documents(self, keyword: str, 
                         location: Optional[str] = None) -> List[Dict[str, Any]]:
         """Search documents (based on title)"""
-        print(f"Searching for documents containing '{keyword}'...")
+        safe_print(f"Searching for documents containing '{keyword}'...")
         all_docs = self.get_documents(location=location)
         
         matching_docs = []
@@ -184,23 +211,23 @@ class DocumentManager:
     
     def display_document_summary(self, document: Dict[str, Any]) -> None:
         """Display document summary information"""
-        print(f"\n--- Document Summary ---")
-        print(f"ID: {document.get('id')}")
-        print(f"Title: {document.get('title', 'N/A')}")
-        print(f"Author: {document.get('author', 'N/A')}")
-        print(f"URL: {document.get('source_url', document.get('url', 'N/A'))}")
-        print(f"Location: {document.get('location', 'N/A')}")
-        print(f"Category: {document.get('category', 'N/A')}")
-        print(f"Created: {document.get('created_at', 'N/A')}")
-        print(f"Updated: {document.get('updated_at', 'N/A')}")
+        safe_print(f"\n--- Document Summary ---")
+        safe_print(f"ID: {document.get('id')}")
+        safe_print(f"Title: {document.get('title', 'N/A')}")
+        safe_print(f"Author: {document.get('author', 'N/A')}")
+        safe_print(f"URL: {document.get('source_url', document.get('url', 'N/A'))}")
+        safe_print(f"Location: {document.get('location', 'N/A')}")
+        safe_print(f"Category: {document.get('category', 'N/A')}")
+        safe_print(f"Created: {document.get('created_at', 'N/A')}")
+        safe_print(f"Updated: {document.get('updated_at', 'N/A')}")
         
         tags = document.get('tags', {})
         if tags:
             tag_names = [tag.get('name', '') for tag in tags]
-            print(f"Tags: {', '.join(tag_names)}")
+            safe_print(f"Tags: {', '.join(tag_names)}")
         
         summary = document.get('summary')
         if summary:
-            print(f"Summary: {summary[:100]}..." if len(summary) > 100 else f"Summary: {summary}")
+            safe_print(f"Summary: {summary[:100]}..." if len(summary) > 100 else f"Summary: {summary}")
         
-        print("-" * 30) 
+        safe_print("-" * 30) 

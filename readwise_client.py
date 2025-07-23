@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from config import Config
@@ -122,26 +123,65 @@ class ReadwiseClient:
     def get_all_documents(self,
                          location: Optional[str] = None,
                          category: Optional[str] = None,
-                         updated_after: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get all documents (handle pagination)"""
+                         updated_after: Optional[str] = None,
+                         delay_seconds: float = 3.0,
+                         max_documents: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get all documents (handle pagination with rate limiting)
+        
+        Args:
+            location: Document location filter
+            category: Document category filter  
+            updated_after: Only get documents updated after this date
+            delay_seconds: Delay between API calls to respect rate limits (default 3s)
+            max_documents: Stop after fetching this many documents (None for all)
+        """
         
         all_documents = []
         next_page_cursor = None
+        request_count = 0
+        
+        print("Fetching all documents with rate limiting...")
         
         while True:
-            response = self.list_documents(
-                location=location,
-                category=category,
-                updated_after=updated_after,
-                page_cursor=next_page_cursor
-            )
-            
-            all_documents.extend(response.get('results', []))
-            next_page_cursor = response.get('nextPageCursor')
-            
-            if not next_page_cursor:
-                break
+            try:
+                # Add delay between requests to respect rate limits (20 requests/minute = 3s between requests)
+                if request_count > 0:
+                    print(f"Waiting {delay_seconds}s before next request (rate limiting)...")
+                    time.sleep(delay_seconds)
                 
+                response = self.list_documents(
+                    location=location,
+                    category=category,
+                    updated_after=updated_after,
+                    page_cursor=next_page_cursor
+                )
+                
+                request_count += 1
+                results = response.get('results', [])
+                all_documents.extend(results)
+                next_page_cursor = response.get('nextPageCursor')
+                
+                print(f"Fetched batch {request_count}: {len(results)} documents (total: {len(all_documents)})")
+                
+                # Check if we've reached the maximum number of documents
+                if max_documents and len(all_documents) >= max_documents:
+                    all_documents = all_documents[:max_documents]
+                    print(f"Reached maximum document limit ({max_documents}), stopping...")
+                    break
+                
+                if not next_page_cursor:
+                    break
+                    
+            except requests.exceptions.RequestException as e:
+                if hasattr(e, 'response') and e.response is not None:
+                    if e.response.status_code == 429:  # Rate limit exceeded
+                        print(f"Rate limit hit, waiting 60 seconds before retry...")
+                        time.sleep(60)
+                        continue
+                print(f"Error fetching documents: {e}")
+                raise
+                
+        print(f"Completed fetching {len(all_documents)} documents in {request_count} requests")
         return all_documents
     
     def update_document(self,
@@ -217,18 +257,38 @@ class ReadwiseClient:
             print(f"Error listing tags: {e}")
             raise
     
-    def get_all_tags(self) -> List[Dict[str, str]]:
-        """Get all tags (handle pagination)"""
+    def get_all_tags(self, delay_seconds: float = 3.0) -> List[Dict[str, str]]:
+        """Get all tags (handle pagination with rate limiting)
+        
+        Args:
+            delay_seconds: Delay between API calls to respect rate limits (default 3s)
+        """
         
         all_tags = []
         next_page_cursor = None
+        request_count = 0
         
         while True:
-            response = self.list_tags(page_cursor=next_page_cursor)
-            all_tags.extend(response.get('results', []))
-            next_page_cursor = response.get('nextPageCursor')
-            
-            if not next_page_cursor:
-                break
+            try:
+                # Add delay between requests to respect rate limits
+                if request_count > 0:
+                    time.sleep(delay_seconds)
+                
+                response = self.list_tags(page_cursor=next_page_cursor)
+                request_count += 1
+                
+                results = response.get('results', [])
+                all_tags.extend(results)
+                next_page_cursor = response.get('nextPageCursor')
+                
+                if not next_page_cursor:
+                    break
+                    
+            except requests.exceptions.RequestException as e:
+                if hasattr(e, 'response') and e.response is not None:
+                    if e.response.status_code == 429:  # Rate limit exceeded
+                        time.sleep(60)
+                        continue
+                raise
                 
         return all_tags 
