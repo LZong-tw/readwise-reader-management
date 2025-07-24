@@ -32,19 +32,19 @@ python web_app.py  # Starts Flask server at http://localhost:5000
 ### Testing
 ```bash
 # Run all tests with coverage
-python3 -m pytest
+python -m pytest
 
 # Run specific test file
-python3 -m pytest tests/test_config.py -v
+python -m pytest tests/test_config.py -v
 
 # Run with detailed output
-python3 -m pytest -vv
+python -m pytest -vv
 
 # Run only unit tests
-python3 -m pytest -m "not integration"
+python -m pytest -m "not integration"
 
 # Run tests and show coverage report
-python3 -m pytest --cov=. --cov-report=html
+python -m pytest --cov=. --cov-report=html
 open htmlcov/index.html  # View coverage report
 
 # Use the test runner script

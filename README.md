@@ -55,22 +55,22 @@ The project includes comprehensive unit tests for all major components.
 
 **Run all tests with coverage report:**
 ```bash
-python3 -m pytest
+python -m pytest
 ```
 
 **Run specific test file:**
 ```bash
-python3 -m pytest tests/test_config.py -v
+python -m pytest tests/test_config.py -v
 ```
 
 **Run tests with detailed output:**
 ```bash
-python3 -m pytest -vv
+python -m pytest -vv
 ```
 
 **Run only unit tests (skip integration tests):**
 ```bash
-python3 -m pytest -m "not integration"
+python -m pytest -m "not integration"
 ```
 
 **Use the test runner script:**
@@ -262,13 +262,13 @@ A: Supports new (new documents), later (read later), archive (archived), feed (s
 ### Running Tests During Development
 ```bash
 # Run tests and watch for changes
-python3 -m pytest --watch
+python -m pytest --watch
 
 # Run with debugging
-python3 -m pytest -vv --pdb
+python -m pytest -vv --pdb
 
 # Run specific test function
-python3 -m pytest tests/test_config.py::TestConfig::test_init_with_env_token
+python -m pytest tests/test_config.py::TestConfig::test_init_with_env_token
 ```
 
 ### Error Handling
