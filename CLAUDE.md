@@ -29,6 +29,28 @@ python cli.py --help  # Show all available commands
 python web_app.py  # Starts Flask server at http://localhost:5000
 ```
 
+### Testing
+```bash
+# Run all tests with coverage
+python3 -m pytest
+
+# Run specific test file
+python3 -m pytest tests/test_config.py -v
+
+# Run with detailed output
+python3 -m pytest -vv
+
+# Run only unit tests
+python3 -m pytest -m "not integration"
+
+# Run tests and show coverage report
+python3 -m pytest --cov=. --cov-report=html
+open htmlcov/index.html  # View coverage report
+
+# Use the test runner script
+./run_tests.sh
+```
+
 ### Common CLI Commands
 ```bash
 # Document management
@@ -57,6 +79,27 @@ python cli.py export --location archive --output filename.json
 - **`tag_manager.py`**: High-level tag operations (list, search, statistics, usage analysis)
 - **`cli.py`**: Command-line interface with argparse-based subcommands
 - **`web_app.py`**: Flask web application providing browser-based interface
+
+### Testing Architecture
+
+- **`tests/`**: Test directory containing unit tests for all components
+- **`pytest.ini`**: PyTest configuration with test paths and coverage settings
+- **`.coveragerc`**: Coverage configuration excluding test files and virtual environments
+- **`run_tests.sh`**: Shell script for running tests with various options
+
+Each component has corresponding test files:
+- `test_config.py`: Tests configuration loading and token management
+- `test_readwise_client.py`: Tests API client with mocked HTTP responses
+- `test_document_manager.py`: Tests document operations
+- `test_tag_manager.py`: Tests tag operations
+- `test_cli.py`: Tests CLI commands and argument parsing
+- `test_web_app.py`: Tests Flask routes and web endpoints
+
+Tests use:
+- `pytest` for test framework
+- `pytest-mock` for mocking
+- `pytest-cov` for coverage reporting
+- `responses` for mocking HTTP requests
 
 ### API Integration
 
@@ -95,3 +138,5 @@ The system supports four document locations:
 - Statistics are calculated by aggregating API responses
 - Export functionality saves documents as JSON with timestamps
 - Error handling includes API rate limit and network error recovery
+- Tests mock external API calls to ensure reliable testing without API token
+- Coverage reporting helps maintain code quality and identify untested code paths
