@@ -11,6 +11,7 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 - ✅ **Statistics**: Document and tag usage statistics
 - ✅ **Export**: Export documents to JSON format
 - ✅ **Search**: Title-based document search
+- ✅ **Comprehensive Testing**: Unit tests with coverage reporting
 
 ## Installation
 
@@ -44,6 +45,56 @@ echo "your_api_token_here" > .readwise_token
 **Method 3: CLI Tool Setup**
 ```bash
 python cli.py setup-token --token your_api_token_here
+```
+
+## Testing
+
+### Running Tests
+
+The project includes comprehensive unit tests for all major components.
+
+**Run all tests with coverage report:**
+```bash
+python3 -m pytest
+```
+
+**Run specific test file:**
+```bash
+python3 -m pytest tests/test_config.py -v
+```
+
+**Run tests with detailed output:**
+```bash
+python3 -m pytest -vv
+```
+
+**Run only unit tests (skip integration tests):**
+```bash
+python3 -m pytest -m "not integration"
+```
+
+**Use the test runner script:**
+```bash
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
+### Test Coverage
+
+The tests cover:
+- Configuration management
+- API client operations
+- Document management functions
+- Tag management operations
+- CLI commands
+- Web application routes
+
+View the HTML coverage report:
+```bash
+# After running tests, open the coverage report
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+start htmlcov/index.html  # Windows
 ```
 
 ## Usage
@@ -163,14 +214,25 @@ This tool implements all features of the [Readwise Reader API](https://readwise.
 ```
 readwise-reader-management/
 ├── config.py              # Configuration management
-├── readwise_client.py      # API client
-├── document_manager.py     # Document manager
+├── readwise_client.py     # API client
+├── document_manager.py    # Document manager
 ├── tag_manager.py         # Tag manager
 ├── cli.py                 # Command line interface
 ├── web_app.py             # Web application
 ├── requirements.txt       # Python dependencies
-├── README.md             # Documentation
-└── .readwise_token       # API token file (auto-generated)
+├── README.md              # Documentation
+├── .readwise_token        # API token file (auto-generated)
+├── pytest.ini             # Pytest configuration
+├── .coveragerc            # Coverage configuration
+├── run_tests.sh           # Test runner script
+└── tests/                 # Test directory
+    ├── __init__.py
+    ├── test_config.py     # Configuration tests
+    ├── test_readwise_client.py  # API client tests
+    ├── test_document_manager.py # Document manager tests
+    ├── test_tag_manager.py      # Tag manager tests
+    ├── test_cli.py        # CLI tests
+    └── test_web_app.py    # Web application tests
 ```
 
 ## FAQ
@@ -195,6 +257,19 @@ A: Supports new (new documents), later (read later), archive (archived), feed (s
 1. Modify the corresponding manager class (`document_manager.py` or `tag_manager.py`)
 2. Add corresponding command in CLI (`cli.py`)
 3. Add corresponding route in Web interface (`web_app.py`)
+4. Add corresponding tests in the `tests/` directory
+
+### Running Tests During Development
+```bash
+# Run tests and watch for changes
+python3 -m pytest --watch
+
+# Run with debugging
+python3 -m pytest -vv --pdb
+
+# Run specific test function
+python3 -m pytest tests/test_config.py::TestConfig::test_init_with_env_token
+```
 
 ### Error Handling
 All API calls include proper error handling and display meaningful error messages.
@@ -205,4 +280,4 @@ This project is released under the MIT License.
 
 ## Contributing
 
-Issues and Pull Requests are welcome to improve this tool! 
+Issues and Pull Requests are welcome to improve this tool! Please ensure all tests pass and maintain test coverage before submitting PRs. 
