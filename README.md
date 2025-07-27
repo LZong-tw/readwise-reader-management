@@ -193,8 +193,17 @@ python cli.py analyze-duplicates
 # Analyze specific location only
 python cli.py analyze-duplicates --location new
 
+# Limit analysis to first N documents (for performance with large collections)
+python cli.py analyze-duplicates --limit 100
+
+# Combine location and limit
+python cli.py analyze-duplicates --location new --limit 50
+
 # Export analysis report
 python cli.py analyze-duplicates --export analysis_report.json
+
+# JSON output format
+python cli.py analyze-duplicates --format json
 ```
 
 **Remove Duplicates**
@@ -207,13 +216,26 @@ python cli.py remove-duplicates --execute
 
 # Auto-confirm without prompting
 python cli.py remove-duplicates --execute --force
+
+# Limit processing to first N documents
+python cli.py remove-duplicates --limit 200 --execute
+
+# Process specific location with limit
+python cli.py remove-duplicates --location new --limit 100 --execute
 ```
 
 **Deduplication Features:**
 - **Smart Detection**: URL normalization (removes tracking parameters) and title similarity matching
 - **Quality Scoring**: Evaluates documents based on title, author, summary, tags, and other metadata
+- **Performance Optimization**: `--limit` parameter for processing large document collections
 - **Safe Operation**: Preview mode by default, requires confirmation before deletion
 - **Detailed Reports**: Shows which documents will be kept/removed with quality scores
+- **Flexible Filtering**: Combine location and limit parameters for targeted processing
+
+**Performance Tips:**
+- **For large collections (1000+ documents)**: Use `--limit` to test with smaller batches first
+- **Recommended workflow**: Start with `--limit 100` to understand duplicate patterns, then increase or remove limit
+- **API rate limits**: The tool automatically handles Readwise API rate limits with delays between requests
 
 ### Web Interface
 
