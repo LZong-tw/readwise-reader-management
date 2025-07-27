@@ -640,8 +640,8 @@ def main():
                                         help='Preview deletions without executing (default)')
     execute_deletion_parser.add_argument('--execute', action='store_true',
                                         help='Actually execute deletions (WARNING: irreversible)')
-    execute_deletion_parser.add_argument('--batch-size', type=int, default=10,
-                                        help='Number of documents to process per batch (default: 10)')
+    execute_deletion_parser.add_argument('--batch-size', type=int, default=5,
+                                        help='Number of documents to process per batch (default: 5, respects 20 req/min API limit)')
     execute_deletion_parser.add_argument('--force', action='store_true',
                                         help='Skip safety confirmation prompts')
     
