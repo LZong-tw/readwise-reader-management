@@ -6,7 +6,8 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 
 - ✅ **Document Management**: Add, list, search, update, delete documents
 - ✅ **Tag Management**: List tags, search tags, get tag statistics
-- ✅ **Document Deduplication**: Smart duplicate detection and removal with quality scoring
+- ✅ **Document Deduplication**: CSV-based duplicate analysis with simple URL comparison
+- ✅ **Advanced Deduplication**: Smart duplicate detection and removal with quality scoring (legacy)
 - ✅ **Multiple Interfaces**: Command Line Interface (CLI) and Web Interface
 - ✅ **Document Organization**: Support for new, later, archive, feed location management
 - ✅ **Statistics**: Document and tag usage statistics
@@ -205,59 +206,85 @@ python cli.py list  # Auto-creates CSV if >200 results
 
 #### Document Deduplication
 
-The deduplication feature intelligently identifies and removes duplicate documents using URL normalization, title similarity matching, and metadata quality scoring.
+##### CSV-Based Duplicate Analysis (Recommended)
 
-**Analyze Duplicates**
+This method analyzes duplicate documents in your exported CSV files by comparing `source_url` without http/https protocols. This is the current preferred method for duplicate detection.
+
+**Analyze CSV File for Duplicates**
 ```bash
-# Analyze all documents for duplicates
+# Basic analysis of CSV file
+python cli.py analyze-csv-duplicates readwise_documents_20250727_153630.csv
+
+# Show detailed duplicate groups
+python cli.py analyze-csv-duplicates your_file.csv --verbose
+
+# Export duplicate list to CSV file
+python cli.py analyze-csv-duplicates your_file.csv --export duplicates_result.csv
+
+# Combined: detailed analysis with export
+python cli.py analyze-csv-duplicates your_file.csv --verbose --export duplicates_result.csv
+```
+
+**CSV Duplicate Analysis Features:**
+- **Simple URL Comparison**: Compares `source_url` after removing http/https protocols
+- **Fast Processing**: Analyzes large CSV files without API calls
+- **CSV Export**: Saves duplicate groups with metadata for further processing
+- **Group Organization**: Groups duplicates by normalized URL with row numbers
+- **Complete Metadata**: Includes id, title, author, created_at, location for each duplicate
+
+**Workflow Example:**
+```bash
+# 1. First, export your documents to CSV
+python cli.py list --format csv
+
+# 2. Analyze the CSV file for duplicates
+python cli.py analyze-csv-duplicates readwise_documents_20250727_153630.csv --verbose --export duplicates.csv
+
+# 3. Review the duplicates.csv file to see grouped duplicates
+# 4. Manually review and clean up duplicates as needed
+```
+
+##### Legacy Deduplication Commands (Not Currently Recommended)
+
+These advanced deduplication commands are available but not currently recommended for use. They provide more sophisticated analysis but are more complex and resource-intensive.
+
+**Advanced Duplicate Analysis** (Legacy)
+```bash
+# Analyze all documents for duplicates (uses live API data)
 python cli.py analyze-duplicates
 
 # Analyze specific location only
 python cli.py analyze-duplicates --location new
 
-# Limit analysis to first N documents (for performance with large collections)
+# Limit analysis for large collections
 python cli.py analyze-duplicates --limit 100
 
-# Combine location and limit
-python cli.py analyze-duplicates --location new --limit 50
-
-# Export analysis report
+# Export detailed analysis report
 python cli.py analyze-duplicates --export analysis_report.json
-
-# JSON output format
-python cli.py analyze-duplicates --format json
 ```
 
-**Remove Duplicates**
+**Advanced Duplicate Removal** (Legacy)
 ```bash
-# Preview mode (default - shows what would be deleted)
+# Preview mode (shows what would be deleted)
 python cli.py remove-duplicates
 
-# Actually execute deletion
+# Actually execute deletion (use with caution)
 python cli.py remove-duplicates --execute
 
-# Auto-confirm without prompting
+# Auto-confirm without prompting (use with extreme caution)
 python cli.py remove-duplicates --execute --force
-
-# Limit processing to first N documents
-python cli.py remove-duplicates --limit 200 --execute
-
-# Process specific location with limit
-python cli.py remove-duplicates --location new --limit 100 --execute
 ```
 
-**Deduplication Features:**
+**Legacy Features:**
 - **Smart Detection**: URL normalization (removes tracking parameters) and title similarity matching
 - **Quality Scoring**: Evaluates documents based on title, author, summary, tags, and other metadata
-- **Performance Optimization**: `--limit` parameter for processing large document collections
 - **Safe Operation**: Preview mode by default, requires confirmation before deletion
-- **Detailed Reports**: Shows which documents will be kept/removed with quality scores
-- **Flexible Filtering**: Combine location and limit parameters for targeted processing
 
-**Performance Tips:**
-- **For large collections (1000+ documents)**: Use `--limit` to test with smaller batches first
-- **Recommended workflow**: Start with `--limit 100` to understand duplicate patterns, then increase or remove limit
-- **API rate limits**: The tool automatically handles Readwise API rate limits with delays between requests
+**⚠️ Important Notes for Legacy Commands:**
+- These commands make live API calls and may be slow for large collections
+- Use `--limit` parameter for testing with smaller batches
+- Always use preview mode first before executing deletions
+- Consider using the CSV-based method instead for better control
 
 #### Progress Display and Large Collections
 
@@ -328,7 +355,8 @@ This tool implements all features of the [Readwise Reader API](https://readwise.
 | PATCH /update/ | `update` | ✅ Edit Document Feature |
 | DELETE /delete/ | `delete`, `remove-duplicates` | ✅ Delete Document Feature |
 | GET /tags/ | `tags` | ✅ Tag Management Page |
-| Custom | `analyze-duplicates` | 🔄 Planned |
+| Custom | `analyze-duplicates` (legacy) | 🔄 Planned |
+| Custom | `analyze-csv-duplicates` | 🔄 Planned |
 | Custom | CSV Export (23 metadata fields) | 🔄 Planned |
 
 ## File Structure

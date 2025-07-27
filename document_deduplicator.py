@@ -367,6 +367,110 @@ class DocumentDeduplicator:
         
         return result
     
+    def normalize_url_simple(self, url: str) -> str:
+        """Simple URL normalization - remove http/https protocol only"""
+        if not url:
+            return ""
+        
+        url = url.strip().lower()
+        
+        # Remove http:// and https://
+        if url.startswith('https://'):
+            return url[8:]  # Remove 'https://'
+        elif url.startswith('http://'):
+            return url[7:]   # Remove 'http://'
+        
+        return url
+    
+    def find_csv_duplicates(self, csv_file_path: str) -> Dict[str, Any]:
+        """Find duplicates in CSV file based on source_url without http/https"""
+        import csv
+        
+        safe_print(f"Analyzing duplicates in CSV file: {csv_file_path}")
+        
+        documents = []
+        url_groups = defaultdict(list)
+        
+        # Read CSV file
+        try:
+            with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row_num, row in enumerate(reader, start=1):
+                    documents.append(row)
+                    
+                    # Group by normalized source_url
+                    source_url = row.get('source_url', '').strip()
+                    if source_url:
+                        normalized_url = self.normalize_url_simple(source_url)
+                        if normalized_url:
+                            url_groups[normalized_url].append({
+                                'row_number': row_num,
+                                'data': row
+                            })
+        except Exception as e:
+            return {"error": f"Failed to read CSV file: {e}"}
+        
+        # Find duplicate groups
+        duplicate_groups = []
+        total_duplicates = 0
+        
+        for normalized_url, docs in url_groups.items():
+            if len(docs) > 1:
+                duplicate_groups.append({
+                    'normalized_url': normalized_url,
+                    'documents': docs,
+                    'count': len(docs)
+                })
+                total_duplicates += len(docs) - 1  # Subtract 1 because we keep one
+        
+        analysis_result = {
+            "csv_file": csv_file_path,
+            "total_documents": len(documents),
+            "duplicate_groups": len(duplicate_groups),
+            "total_duplicates": total_duplicates,
+            "groups": duplicate_groups
+        }
+        
+        safe_print(f"Found {len(duplicate_groups)} duplicate groups with {total_duplicates} total duplicates")
+        
+        return analysis_result
+    
+    def export_csv_duplicates(self, analysis: Dict[str, Any], output_file: Optional[str] = None) -> str:
+        """Export duplicate analysis to CSV file"""
+        import csv
+        
+        if not output_file:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"readwise_duplicates_{timestamp}.csv"
+        
+        try:
+            with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['group_id', 'normalized_url', 'row_number', 'id', 'title', 'source_url', 'author', 'created_at', 'location']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for group_id, group in enumerate(analysis['groups'], start=1):
+                    for doc_info in group['documents']:
+                        row_data = doc_info['data']
+                        writer.writerow({
+                            'group_id': group_id,
+                            'normalized_url': group['normalized_url'],
+                            'row_number': doc_info['row_number'],
+                            'id': row_data.get('id', ''),
+                            'title': row_data.get('title', ''),
+                            'source_url': row_data.get('source_url', ''),
+                            'author': row_data.get('author', ''),
+                            'created_at': row_data.get('created_at', ''),
+                            'location': row_data.get('location', '')
+                        })
+            
+            safe_print(f"Duplicate analysis exported to: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            safe_print(f"Failed to export duplicates to CSV: {e}")
+            return ""
+
     def export_analysis_report(self, analysis: Dict[str, Any], filename: Optional[str] = None) -> str:
         """Export analysis report to file"""
         if not filename:

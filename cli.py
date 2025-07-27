@@ -307,6 +307,58 @@ class ReadwiseCLI:
         except Exception as e:
             print(f"Deduplication failed: {e}")
     
+    def analyze_csv_duplicates(self, args) -> None:
+        """Analyze duplicates in CSV file based on source_url"""
+        from document_deduplicator import DocumentDeduplicator
+        
+        try:
+            safe_print("Initializing CSV duplicate analyzer...")
+            deduplicator = DocumentDeduplicator(self.client)
+            
+            # Analyze CSV file
+            analysis = deduplicator.find_csv_duplicates(args.csv_file)
+            
+            if analysis.get("error"):
+                safe_print(f"Error: {analysis['error']}")
+                return
+            
+            # Display results
+            safe_print(f"\n=== CSV Duplicate Analysis Results ===")
+            safe_print(f"CSV file: {analysis['csv_file']}")
+            safe_print(f"Total documents: {analysis['total_documents']}")
+            safe_print(f"Duplicate groups: {analysis['duplicate_groups']}")
+            safe_print(f"Total duplicates: {analysis['total_duplicates']}")
+            
+            if analysis['duplicate_groups'] == 0:
+                safe_print("No duplicate documents found based on source_url")
+                return
+            
+            # Show detailed groups if requested
+            if args.verbose:
+                safe_print(f"\n=== Duplicate Groups ===")
+                for i, group in enumerate(analysis['groups'], 1):
+                    safe_print(f"\nGroup {i}: {group['normalized_url']}")
+                    safe_print(f"  {group['count']} documents with same normalized URL:")
+                    for doc_info in group['documents']:
+                        data = doc_info['data']
+                        title = data.get('title', 'No title')[:50]
+                        safe_print(f"    Row {doc_info['row_number']}: {title}...")
+            
+            # Export duplicate list to CSV
+            if args.export:
+                output_file = args.export
+            else:
+                output_file = None
+            
+            csv_file = deduplicator.export_csv_duplicates(analysis, output_file)
+            if csv_file:
+                safe_print(f"\nDuplicate list saved to: {csv_file}")
+            
+        except Exception as e:
+            safe_print(f"Error during CSV duplicate analysis: {e}")
+            import traceback
+            traceback.print_exc()
+
     def setup_token(self, args) -> None:
         """Setup API token"""
         if args.token:
@@ -426,6 +478,14 @@ def main():
                                     help='Auto-confirm without asking user')
     dedup_remove_parser.add_argument('--export', help='Export processing report to specified file')
     
+    # CSV duplicate analysis
+    csv_dedup_parser = subparsers.add_parser('analyze-csv-duplicates', 
+                                            help='Analyze duplicates in CSV file based on source_url')
+    csv_dedup_parser.add_argument('csv_file', help='Path to CSV file to analyze')
+    csv_dedup_parser.add_argument('--verbose', action='store_true',
+                                 help='Show detailed duplicate groups')
+    csv_dedup_parser.add_argument('--export', help='Export duplicate list to specified CSV file')
+    
     # Setup token
     setup_parser = subparsers.add_parser('setup-token', help='Setup API token')
     setup_parser.add_argument('--token', help='Readwise API token')
@@ -472,6 +532,7 @@ def main():
         'tag-stats': cli.tag_stats,
         'analyze-duplicates': cli.analyze_duplicates,
         'remove-duplicates': cli.remove_duplicates,
+        'analyze-csv-duplicates': cli.analyze_csv_duplicates,
     }
     
     if args.command in command_map:
