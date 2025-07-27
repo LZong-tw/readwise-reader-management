@@ -683,6 +683,7 @@ class DocumentDeduplicator:
         """Execute deletion plan from CSV file"""
         import csv
         import time
+        import signal
         from datetime import datetime
         
         safe_print(f"{'[DRY RUN] ' if dry_run else ''}Executing deletion plan from: {csv_file_path}")
@@ -744,71 +745,106 @@ class DocumentDeduplicator:
         failed_deletions = 0
         errors = []
         successfully_deleted_ids = set()  # Track successfully deleted document IDs
+        interrupted = False  # Track if Ctrl+C was pressed
         
-        # Process in batches to respect rate limits
-        for i in range(0, len(deletion_candidates), batch_size):
-            batch = deletion_candidates[i:i+batch_size]
-            safe_print(f"\nProcessing batch {i//batch_size + 1}/{(len(deletion_candidates) + batch_size - 1)//batch_size}")
-            
-            for doc in batch:
-                safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
-                
-                # Implement retry logic for 429 errors (unlimited retries)
-                retry_count = 0
-                deletion_successful = False
-                
-                while not deletion_successful:
-                    try:
-                        result = self.client.delete_document(doc['document_id'])
-                        
-                        if result:
-                            successful_deletions += 1
-                            successfully_deleted_ids.add(doc['document_id'])
-                            safe_print(f"  ✅ Deleted successfully")
-                            deletion_successful = True
-                        else:
-                            failed_deletions += 1
-                            error_msg = "API returned failure status"
-                            errors.append(f"Document {doc['document_id']}: {error_msg}")
-                            safe_print(f"  ❌ Failed: {error_msg}")
-                            deletion_successful = True  # Don't retry for non-429 failures
+        # Setup signal handler for Ctrl+C
+        def signal_handler(signum, frame):
+            nonlocal interrupted
+            interrupted = True
+            safe_print("\n\n🛑 Ctrl+C detected - gracefully stopping after current document...")
+            safe_print("⚠️  Please wait for safe completion...")
+        
+        # Register signal handler for graceful shutdown
+        original_sigint_handler = signal.signal(signal.SIGINT, signal_handler)
+        
+        try:
+            # Process in batches to respect rate limits
+            for i in range(0, len(deletion_candidates), batch_size):
+                if interrupted:
+                    safe_print("🛑 Stopping due to user interrupt...")
+                    break
                     
-                    except Exception as e:
-                        error_msg = str(e)
-                        
-                        # Check if this is a 429 (rate limit) error
-                        if "429" in error_msg:
-                            retry_count += 1
-                            
-                            # Try to extract Retry-After value from error message
-                            retry_after = self._extract_retry_after(e)
-                            if retry_after:
-                                safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {retry_after}s...")
-                                time.sleep(retry_after)
-                            else:
-                                # Default retry delay if no Retry-After header
-                                default_delay = 60  # 60 seconds default
-                                safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {default_delay}s (default)...")
-                                time.sleep(default_delay)
-                            # Continue the loop to retry
-                        else:
-                            # Non-429 error - fail immediately
-                            failed_deletions += 1
-                            errors.append(f"Document {doc['document_id']}: {error_msg}")
-                            safe_print(f"  ❌ Exception: {error_msg}")
-                            deletion_successful = True  # Exit retry loop
+                batch = deletion_candidates[i:i+batch_size]
+                safe_print(f"\nProcessing batch {i//batch_size + 1}/{(len(deletion_candidates) + batch_size - 1)//batch_size}")
                 
-                # Respect Readwise Reader API rate limit: 20 requests per minute
-                # Wait 3.5 seconds between requests to stay well under the limit
-                if doc != batch[-1] or i + batch_size < len(deletion_candidates):
-                    safe_print(f"  ⏳ Waiting 3.5s to respect API rate limit (20 req/min)...")
-                    time.sleep(3.5)
+                for doc in batch:
+                    if interrupted:
+                        safe_print("🛑 Stopping due to user interrupt...")
+                        break
+                        
+                    safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
+                    
+                    # Implement retry logic for 429 errors (unlimited retries)
+                    retry_count = 0
+                    deletion_successful = False
+                    
+                    while not deletion_successful and not interrupted:
+                        try:
+                            result = self.client.delete_document(doc['document_id'])
+                            
+                            if result:
+                                successful_deletions += 1
+                                successfully_deleted_ids.add(doc['document_id'])
+                                safe_print(f"  ✅ Deleted successfully")
+                                deletion_successful = True
+                            else:
+                                failed_deletions += 1
+                                error_msg = "API returned failure status"
+                                errors.append(f"Document {doc['document_id']}: {error_msg}")
+                                safe_print(f"  ❌ Failed: {error_msg}")
+                                deletion_successful = True  # Don't retry for non-429 failures
+                        
+                        except Exception as e:
+                            error_msg = str(e)
+                            
+                            # Check if this is a 429 (rate limit) error
+                            if "429" in error_msg:
+                                retry_count += 1
+                                
+                                # Try to extract Retry-After value from error message
+                                retry_after = self._extract_retry_after(e)
+                                if retry_after:
+                                    safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {retry_after}s...")
+                                    time.sleep(retry_after)
+                                else:
+                                    # Default retry delay if no Retry-After header
+                                    default_delay = 60  # 60 seconds default
+                                    safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {default_delay}s (default)...")
+                                    time.sleep(default_delay)
+                                # Continue the loop to retry
+                            else:
+                                # Non-429 error - fail immediately
+                                failed_deletions += 1
+                                errors.append(f"Document {doc['document_id']}: {error_msg}")
+                                safe_print(f"  ❌ Exception: {error_msg}")
+                                deletion_successful = True  # Exit retry loop
+                    
+                    if interrupted:
+                        break
+                    
+                    # Respect Readwise Reader API rate limit: 20 requests per minute
+                    # Wait 3.5 seconds between requests to stay well under the limit
+                    if doc != batch[-1] or i + batch_size < len(deletion_candidates):
+                        safe_print(f"  ⏳ Waiting 3.5s to respect API rate limit (20 req/min)...")
+                        time.sleep(3.5)
+                
+                if interrupted:
+                    break
+        
+        finally:
+            # Restore original signal handler
+            signal.signal(signal.SIGINT, original_sigint_handler)
         
         # Generate execution report
-        safe_print(f"\n=== DELETION EXECUTION COMPLETED ===")
+        completion_status = "INTERRUPTED" if interrupted else "COMPLETED"
+        safe_print(f"\n=== DELETION EXECUTION {completion_status} ===")
         safe_print(f"Total candidates: {len(deletion_candidates)}")
         safe_print(f"Successful deletions: {successful_deletions}")
         safe_print(f"Failed deletions: {failed_deletions}")
+        
+        if interrupted:
+            safe_print(f"\n⚠️  Execution was interrupted by user (Ctrl+C)")
+            safe_print(f"Processed: {successful_deletions + failed_deletions}/{len(deletion_candidates)} documents")
         
         if errors:
             safe_print(f"\nErrors encountered:")
@@ -817,9 +853,12 @@ class DocumentDeduplicator:
             if len(errors) > 5:
                 safe_print(f"  ... and {len(errors) - 5} more errors")
         
-        # Create updated plan file (remove successfully deleted and 404 documents)
+        # Create updated plan file ONLY on normal completion or Ctrl+C interrupt
+        # NOT on unexpected crashes or exceptions
         new_plan_file = None
-        if not dry_run:
+        if not dry_run and (successfully_deleted_ids or len(errors) > 0):
+            # Save updated plan since we processed some documents
+            safe_print(f"\n💾 Saving updated deletion plan...")
             new_plan_file = self._update_deletion_plan(
                 csv_file_path, 
                 successfully_deleted_ids, 
@@ -829,6 +868,8 @@ class DocumentDeduplicator:
         # Export execution report
         report_data = {
             "execution_timestamp": datetime.now().isoformat(),
+            "completion_status": completion_status,
+            "interrupted": interrupted,
             "total_candidates": len(deletion_candidates),
             "successful_deletions": successful_deletions,
             "failed_deletions": failed_deletions,
@@ -850,13 +891,15 @@ class DocumentDeduplicator:
         
         return {
             "total_candidates": len(deletion_candidates),
-            "processed": len(deletion_candidates),
+            "processed": successful_deletions + failed_deletions,
             "successful_deletions": successful_deletions,
             "failed_deletions": failed_deletions,
             "success_rate": successful_deletions / len(deletion_candidates) if deletion_candidates else 0,
             "errors": errors,
             "report_file": report_filename,
-            "updated_plan_file": new_plan_file
+            "updated_plan_file": new_plan_file,
+            "interrupted": interrupted,
+            "completion_status": completion_status
         }
     
     def _extract_retry_after(self, exception: Exception) -> Optional[int]:
