@@ -125,7 +125,8 @@ class ReadwiseClient:
                          category: Optional[str] = None,
                          updated_after: Optional[str] = None,
                          delay_seconds: float = 3.0,
-                         max_documents: Optional[int] = None) -> List[Dict[str, Any]]:
+                         max_documents: Optional[int] = None,
+                         show_progress: bool = True) -> List[Dict[str, Any]]:
         """Get all documents (handle pagination with rate limiting)
         
         Args:
@@ -134,20 +135,44 @@ class ReadwiseClient:
             updated_after: Only get documents updated after this date
             delay_seconds: Delay between API calls to respect rate limits (default 3s)
             max_documents: Stop after fetching this many documents (None for all)
+            show_progress: Whether to show detailed progress information
         """
         
         all_documents = []
         next_page_cursor = None
         request_count = 0
+        start_time = time.time()
         
-        print("Fetching all documents with rate limiting...")
+        if show_progress:
+            filter_info = []
+            if location:
+                filter_info.append(f"location={location}")
+            if category:
+                filter_info.append(f"category={category}")
+            if updated_after:
+                filter_info.append(f"updated_after={updated_after}")
+            if max_documents:
+                filter_info.append(f"max={max_documents}")
+            
+            filter_str = f" ({', '.join(filter_info)})" if filter_info else ""
+            print(f"📚 Starting document retrieval{filter_str}...")
+            print(f"⏱️  Rate limiting: {delay_seconds}s delay between batches")
         
         while True:
             try:
                 # Add delay between requests to respect rate limits (20 requests/minute = 3s between requests)
                 if request_count > 0:
-                    print(f"Waiting {delay_seconds}s before next request (rate limiting)...")
-                    time.sleep(delay_seconds)
+                    if show_progress:
+                        # Show countdown for rate limiting
+                        for remaining in range(int(delay_seconds), 0, -1):
+                            print(f"\r⏳ Waiting {remaining}s (API rate limiting)...", end="", flush=True)
+                            time.sleep(1)
+                        print()  # New line after countdown
+                    else:
+                        time.sleep(delay_seconds)
+                
+                if show_progress:
+                    print(f"🔄 Fetching batch {request_count + 1}...", end="", flush=True)
                 
                 response = self.list_documents(
                     location=location,
@@ -161,12 +186,24 @@ class ReadwiseClient:
                 all_documents.extend(results)
                 next_page_cursor = response.get('nextPageCursor')
                 
-                print(f"Fetched batch {request_count}: {len(results)} documents (total: {len(all_documents)})")
+                # Calculate progress statistics
+                elapsed_time = time.time() - start_time
+                avg_time_per_batch = elapsed_time / request_count if request_count > 0 else 0
+                
+                if show_progress:
+                    print(f"\r✅ Batch {request_count} completed: {len(results)} documents (total: {len(all_documents)})")
+                    print(f"📊 Elapsed: {elapsed_time:.1f}s, avg per batch: {avg_time_per_batch:.1f}s")
+                    
+                    if next_page_cursor:
+                        print(f"🔗 More data available, preparing next batch...")
+                    else:
+                        print(f"🎉 All available data retrieved!")
                 
                 # Check if we've reached the maximum number of documents
                 if max_documents and len(all_documents) >= max_documents:
                     all_documents = all_documents[:max_documents]
-                    print(f"Reached maximum document limit ({max_documents}), stopping...")
+                    if show_progress:
+                        print(f"🛑 Reached maximum document limit ({max_documents}), stopping...")
                     break
                 
                 if not next_page_cursor:
@@ -175,10 +212,18 @@ class ReadwiseClient:
             except requests.exceptions.RequestException as e:
                 if hasattr(e, 'response') and e.response is not None:
                     if e.response.status_code == 429:  # Rate limit exceeded
-                        print(f"Rate limit hit, waiting 60 seconds before retry...")
-                        time.sleep(60)
+                        if show_progress:
+                            print(f"⚠️  Rate limit exceeded, waiting 60s before retry...")
+                            # Show countdown for rate limit retry
+                            for remaining in range(60, 0, -1):
+                                print(f"\r⏳ Retrying in {remaining}s...", end="", flush=True)
+                                time.sleep(1)
+                            print()  # New line after countdown
+                        else:
+                            time.sleep(60)
                         continue
-                print(f"Error fetching documents: {e}")
+                if show_progress:
+                    print(f"❌ Error fetching documents: {e}")
                 raise
                 
         print(f"Completed fetching {len(all_documents)} documents in {request_count} requests")

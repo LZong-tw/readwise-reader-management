@@ -64,14 +64,17 @@ class DocumentManager:
     def get_documents(self, location: Optional[str] = None, 
                      category: Optional[str] = None,
                      tags: Optional[List[str]] = None,
-                     limit: Optional[int] = None) -> List[Dict[str, Any]]:
+                     limit: Optional[int] = None,
+                     show_progress: bool = True) -> List[Dict[str, Any]]:
         """Get document list"""
-        safe_print("Getting document list...")
+        if show_progress:
+            safe_print("Getting document list...")
         
         if limit:
             if limit <= 100:
                 # Single API call is enough
-                safe_print(f"Fetching up to {limit} documents...")
+                if show_progress:
+                    safe_print(f"Fetching up to {limit} documents...")
                 response = self.client.list_documents(
                     location=location,
                     category=category,
@@ -80,21 +83,26 @@ class DocumentManager:
                 documents = response.get('results', [])[:limit]
             else:
                 # Need multiple API calls but with a limit
-                print(f"Fetching up to {limit} documents (multiple requests needed)...")
+                if show_progress:
+                    print(f"Fetching up to {limit} documents (multiple requests needed)...")
                 documents = self.client.get_all_documents(
                     location=location,
                     category=category,
-                    max_documents=limit
+                    max_documents=limit,
+                    show_progress=show_progress
                 )
         else:
             # No limit specified, get all documents with rate limiting
-            print("Fetching all documents (this may take a while with rate limiting)...")
+            if show_progress:
+                print("Fetching all documents (this may take a while with rate limiting)...")
             documents = self.client.get_all_documents(
                 location=location,
-                category=category
+                category=category,
+                show_progress=show_progress
             )
         
-        safe_print(f"Found {len(documents)} documents")
+        if show_progress:
+            safe_print(f"Found {len(documents)} documents")
         return documents
     
     def search_documents(self, keyword: str, 

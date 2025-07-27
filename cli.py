@@ -52,7 +52,8 @@ class ReadwiseCLI:
             docs = self.doc_manager.get_documents(
                 location=args.location,
                 category=args.category,
-                limit=args.limit
+                limit=args.limit,
+                show_progress=not args.no_progress
             )
             
             if not docs:
@@ -337,6 +338,8 @@ def main():
                             help='Output format')
     list_parser.add_argument('--verbose', '-v', action='store_true', 
                             help='Show detailed information')
+    list_parser.add_argument('--no-progress', action='store_true',
+                            help='Disable progress display for large document lists')
     
     # Search documents
     search_parser = subparsers.add_parser('search', help='Search documents')
