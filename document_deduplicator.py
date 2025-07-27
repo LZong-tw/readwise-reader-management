@@ -752,12 +752,11 @@ class DocumentDeduplicator:
             for doc in batch:
                 safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
                 
-                # Implement retry logic for 429 errors
-                max_retries = 3
+                # Implement retry logic for 429 errors (unlimited retries)
                 retry_count = 0
                 deletion_successful = False
                 
-                while retry_count <= max_retries and not deletion_successful:
+                while not deletion_successful:
                     try:
                         result = self.client.delete_document(doc['document_id'])
                         
@@ -776,27 +775,25 @@ class DocumentDeduplicator:
                         error_msg = str(e)
                         
                         # Check if this is a 429 (rate limit) error
-                        if "429" in error_msg and retry_count < max_retries:
+                        if "429" in error_msg:
                             retry_count += 1
                             
                             # Try to extract Retry-After value from error message
                             retry_after = self._extract_retry_after(e)
                             if retry_after:
-                                safe_print(f"  ⚠️  Rate limited (429). Retry {retry_count}/{max_retries} after {retry_after}s...")
+                                safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {retry_after}s...")
                                 time.sleep(retry_after)
                             else:
                                 # Default retry delay if no Retry-After header
                                 default_delay = 60  # 60 seconds default
-                                safe_print(f"  ⚠️  Rate limited (429). Retry {retry_count}/{max_retries} after {default_delay}s (default)...")
+                                safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {default_delay}s (default)...")
                                 time.sleep(default_delay)
+                            # Continue the loop to retry
                         else:
-                            # Non-429 error or max retries reached
+                            # Non-429 error - fail immediately
                             failed_deletions += 1
                             errors.append(f"Document {doc['document_id']}: {error_msg}")
-                            if "429" in error_msg:
-                                safe_print(f"  ❌ Rate limited - max retries ({max_retries}) reached: {error_msg}")
-                            else:
-                                safe_print(f"  ❌ Exception: {error_msg}")
+                            safe_print(f"  ❌ Exception: {error_msg}")
                             deletion_successful = True  # Exit retry loop
                 
                 # Respect Readwise Reader API rate limit: 20 requests per minute
