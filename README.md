@@ -238,7 +238,7 @@ python cli.py execute-deletion deletion_plan.csv --execute --batch-size 5 --forc
 **Safety Features:**
 - **Dry-run mode** (default): Preview deletions without making changes
 - **Confirmation prompts**: Type 'DELETE' to confirm execution
-- **Batch processing**: Respects API rate limits (20-50 requests/minute)
+- **Batch processing**: Respects API rate limits (20 requests/minute for DELETE operations)
 - **Execution reports**: JSON reports with detailed results
 - **Error handling**: Continues processing even if some deletions fail
 

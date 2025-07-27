@@ -679,7 +679,7 @@ class DocumentDeduplicator:
         else:
             return "Oldest creation date" 
 
-    def execute_deletion_plan(self, csv_file_path: str, dry_run: bool = True, batch_size: int = 10) -> Dict[str, Any]:
+    def execute_deletion_plan(self, csv_file_path: str, dry_run: bool = True, batch_size: int = 5) -> Dict[str, Any]:
         """Execute deletion plan from CSV file"""
         import csv
         import time
@@ -769,13 +769,11 @@ class DocumentDeduplicator:
                     errors.append(f"Document {doc['document_id']}: {error_msg}")
                     safe_print(f"  ❌ Exception: {error_msg}")
                 
-                # Small delay to respect rate limits
-                time.sleep(0.1)
-            
-            # Longer delay between batches
-            if i + batch_size < len(deletion_candidates):
-                safe_print(f"Waiting between batches (rate limit protection)...")
-                time.sleep(2)
+                # Respect Readwise Reader API rate limit: 20 requests per minute
+                # Wait 3.5 seconds between requests to stay well under the limit
+                if doc != batch[-1] or i + batch_size < len(deletion_candidates):
+                    safe_print(f"  ⏳ Waiting 3.5s to respect API rate limit (20 req/min)...")
+                    time.sleep(3.5)
         
         # Generate execution report
         safe_print(f"\n=== DELETION EXECUTION COMPLETED ===")
