@@ -60,8 +60,19 @@ class ReadwiseCLI:
                 print("No documents found matching criteria")
                 return
             
+            # Auto-export to CSV if more than 200 documents and not explicitly requesting JSON
+            if len(docs) > 200 and args.format != 'json':
+                print(f"Found {len(docs)} documents (>200). Auto-exporting to CSV for better handling...")
+                csv_filename = self.doc_manager.export_documents_to_csv(docs)
+                print(f"📁 Complete document metadata saved to: {csv_filename}")
+                print(f"💡 Use --format json or --limit 200 to see results in terminal")
+                return
+            
             if args.format == 'json':
                 print(json.dumps(docs, ensure_ascii=False, indent=2))
+            elif args.format == 'csv':
+                csv_filename = self.doc_manager.export_documents_to_csv(docs)
+                print(f"📁 Documents exported to CSV: {csv_filename}")
             else:
                 for i, doc in enumerate(docs, 1):
                     safe_print(f"\n{i}. {doc.get('title', 'N/A')}")
@@ -334,7 +345,7 @@ def main():
                             help='Filter by location')
     list_parser.add_argument('--category', help='Filter by category')
     list_parser.add_argument('--limit', type=int, help='Limit count')
-    list_parser.add_argument('--format', choices=['text', 'json'], default='text',
+    list_parser.add_argument('--format', choices=['text', 'json', 'csv'], default='text',
                             help='Output format')
     list_parser.add_argument('--verbose', '-v', action='store_true', 
                             help='Show detailed information')

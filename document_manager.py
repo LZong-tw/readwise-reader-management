@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import json
+import csv
 import sys
 import os
 from readwise_client import ReadwiseClient
@@ -238,4 +239,56 @@ class DocumentManager:
         if summary:
             safe_print(f"Summary: {summary[:100]}..." if len(summary) > 100 else f"Summary: {summary}")
         
-        safe_print("-" * 30) 
+        safe_print("-" * 30)
+    
+    def export_documents_to_csv(self, documents: List[Dict[str, Any]], filename: Optional[str] = None) -> str:
+        """Export documents to CSV file with complete metadata"""
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"readwise_documents_{timestamp}.csv"
+        
+        # Define all possible fields based on Readwise API documentation
+        csv_fields = [
+            'id', 'url', 'source_url', 'title', 'author', 'summary', 'site_name',
+            'word_count', 'published_date', 'image_url', 'notes', 'category', 
+            'location', 'source', 'created_at', 'updated_at', 'saved_at', 
+            'last_moved_at', 'first_opened_at', 'last_opened_at', 'reading_progress',
+            'parent_id', 'tags'
+        ]
+        
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=csv_fields)
+            writer.writeheader()
+            
+            for doc in documents:
+                # Prepare row data
+                row = {}
+                for field in csv_fields:
+                    if field == 'tags':
+                        # Handle tags field specially - convert to comma-separated string
+                        tags = doc.get('tags', {})
+                        if isinstance(tags, dict) and tags:
+                            tag_names = [tag.get('name', '') for tag in tags if isinstance(tag, dict)]
+                            row[field] = ', '.join(tag_names) if tag_names else ''
+                        elif isinstance(tags, list):
+                            tag_names = [tag.get('name', '') if isinstance(tag, dict) else str(tag) for tag in tags]
+                            row[field] = ', '.join(tag_names) if tag_names else ''
+                        else:
+                            row[field] = ''
+                    else:
+                        # Handle all other fields
+                        value = doc.get(field, '')
+                        # Convert None to empty string
+                        if value is None:
+                            value = ''
+                        # Convert complex objects to string representation
+                        elif isinstance(value, (dict, list)):
+                            value = json.dumps(value, ensure_ascii=False)
+                        # Clean up string values - replace newlines with spaces for CSV compatibility
+                        value = str(value).replace('\n', ' ').replace('\r', ' ')
+                        row[field] = value
+                
+                writer.writerow(row)
+        
+        safe_print(f"Exported {len(documents)} documents to CSV: {filename}")
+        return filename 
