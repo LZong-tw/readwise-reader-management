@@ -18,12 +18,15 @@ if os.name == 'nt':
 
 def safe_print(text: str) -> None:
     """Print text safely, handling encoding issues on Windows"""
+    import sys
     try:
-        print(text)
+        print(text, flush=True)  # Force immediate output
+        sys.stdout.flush()       # Additional flush for Windows
     except UnicodeEncodeError:
         # Replace problematic characters with safe alternatives
         safe_text = text.encode('utf-8', errors='replace').decode('utf-8')
-        print(safe_text)
+        print(safe_text, flush=True)
+        sys.stdout.flush()
 
 class DocumentManager:
     """Readwise document manager"""

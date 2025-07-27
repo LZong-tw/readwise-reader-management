@@ -750,6 +750,7 @@ class DocumentDeduplicator:
             safe_print(f"\nProcessing batch {i//batch_size + 1}/{(len(deletion_candidates) + batch_size - 1)//batch_size}")
             
             for doc in batch:
+                is_404_error = False
                 try:
                     safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
                     result = self.client.delete_document(doc['document_id'])
@@ -768,12 +769,21 @@ class DocumentDeduplicator:
                     error_msg = str(e)
                     errors.append(f"Document {doc['document_id']}: {error_msg}")
                     safe_print(f"  ❌ Exception: {error_msg}")
+                    # Check if this is a 404 error for faster processing
+                    is_404_error = "404" in error_msg
                 
                 # Respect Readwise Reader API rate limit: 20 requests per minute
-                # Wait 3.5 seconds between requests to stay well under the limit
+                # For 404 errors (document not found), use shorter delay since these fail quickly
+                # For successful deletions or other errors, use full rate limit delay
                 if doc != batch[-1] or i + batch_size < len(deletion_candidates):
-                    safe_print(f"  ⏳ Waiting 3.5s to respect API rate limit (20 req/min)...")
-                    time.sleep(3.5)
+                    if is_404_error:
+                        # Document not found - use shorter delay (1 second)
+                        safe_print(f"  ⏳ Waiting 1s (404 error, shorter delay)...")
+                        time.sleep(1.0)
+                    else:
+                        # Normal processing or other errors - use full delay
+                        safe_print(f"  ⏳ Waiting 3.5s to respect API rate limit (20 req/min)...")
+                        time.sleep(3.5)
         
         # Generate execution report
         safe_print(f"\n=== DELETION EXECUTION COMPLETED ===")
