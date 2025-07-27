@@ -232,7 +232,7 @@ class DocumentManager:
         
         tags = document.get('tags', {})
         if tags:
-            tag_names = [tag.get('name', '') for tag in tags]
+            tag_names = [tag_info.get('name', '') for tag_info in tags.values() if isinstance(tag_info, dict)]
             safe_print(f"Tags: {', '.join(tag_names)}")
         
         summary = document.get('summary')
@@ -268,7 +268,7 @@ class DocumentManager:
                         # Handle tags field specially - convert to comma-separated string
                         tags = doc.get('tags', {})
                         if isinstance(tags, dict) and tags:
-                            tag_names = [tag.get('name', '') for tag in tags if isinstance(tag, dict)]
+                            tag_names = [tag_info.get('name', '') for tag_info in tags.values() if isinstance(tag_info, dict)]
                             row[field] = ', '.join(tag_names) if tag_names else ''
                         elif isinstance(tags, list):
                             tag_names = [tag.get('name', '') if isinstance(tag, dict) else str(tag) for tag in tags]
