@@ -8,6 +8,7 @@ from config import Config
 from readwise_client import ReadwiseClient
 from document_manager import DocumentManager, safe_print
 from tag_manager import TagManager
+from document_deduplicator import DocumentDeduplicator
 
 class ReadwiseCLI:
     """Readwise command line interface"""
@@ -18,6 +19,7 @@ class ReadwiseCLI:
             self.client = ReadwiseClient(self.config)
             self.doc_manager = DocumentManager(self.client)
             self.tag_manager = TagManager(self.client)
+            self.deduplicator = DocumentDeduplicator(self.client)
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
@@ -188,6 +190,95 @@ class ReadwiseCLI:
         except Exception as e:
             print(f"Failed to get tag statistics: {e}")
     
+    def analyze_duplicates(self, args) -> None:
+        """Analyze duplicate documents without deletion"""
+        try:
+            safe_print("Starting duplicate analysis...")
+            
+            # Get documents based on parameters
+            documents = None
+            if args.location:
+                documents = self.doc_manager.get_documents(location=args.location)
+            
+            analysis = self.deduplicator.analyze_duplicates(documents)
+            
+            if analysis.get("error"):
+                print(f"Analysis failed: {analysis['error']}")
+                return
+            
+            if analysis["duplicate_groups"] == 0:
+                safe_print("No duplicate documents found")
+                return
+            
+            # Display analysis results
+            safe_print(f"\n=== Duplicate Document Analysis Results ===")
+            safe_print(f"Total documents: {analysis['total_documents']}")
+            safe_print(f"Duplicate groups: {analysis['duplicate_groups']}")
+            safe_print(f"Duplicates to remove: {analysis['total_duplicates']}")
+            
+            if args.format == 'json':
+                print(json.dumps(analysis, ensure_ascii=False, indent=2))
+            else:
+                for group in analysis["groups"]:
+                    safe_print(f"\n--- Group {group['group_id']} ---")
+                    safe_print(f"Keep document: {group['best_document']['title'][:60]}...")
+                    safe_print(f"  ID: {group['best_document']['id']}")
+                    safe_print(f"  Quality score: {group['best_document']['quality_score']:.1f}")
+                    safe_print(f"  Author: {group['best_document']['author'] or 'N/A'}")
+                    safe_print(f"  Location: {group['best_document']['location']}")
+                    
+                    safe_print(f"Will remove {len(group['duplicates_to_remove'])} duplicate documents:")
+                    for dup in group["duplicates_to_remove"]:
+                        safe_print(f"  - {dup['title'][:60]}... (score: {dup['quality_score']:.1f})")
+            
+            # Export report
+            if args.export:
+                filename = self.deduplicator.export_analysis_report(analysis, args.export)
+                
+        except Exception as e:
+            print(f"Analysis failed: {e}")
+    
+    def remove_duplicates(self, args) -> None:
+        """Execute deduplication operation"""
+        try:
+            safe_print("Starting deduplication process...")
+            
+            # Get documents based on parameters
+            documents = None
+            if args.location:
+                documents = self.doc_manager.get_documents(location=args.location)
+            
+            result = self.deduplicator.remove_duplicates(
+                documents=documents,
+                dry_run=args.dry_run,
+                auto_confirm=args.force
+            )
+            
+            if result.get("error"):
+                print(f"Deduplication failed: {result['error']}")
+                return
+            
+            if result.get("message"):
+                safe_print(result["message"])
+                return
+            
+            # Display results
+            if result.get("dry_run"):
+                safe_print("\n*** This is preview mode, no documents were actually deleted ***")
+                safe_print("Use --execute parameter to perform actual deletion")
+            else:
+                safe_print(f"\n=== Deduplication Complete ===")
+                safe_print(f"Successfully deleted: {result.get('removed_count', 0)} duplicate documents")
+                if result.get("failed_deletions"):
+                    safe_print(f"Failed to delete: {len(result['failed_deletions'])} documents")
+            
+            # Export report
+            if args.export and result.get("analysis"):
+                filename = self.deduplicator.export_analysis_report(result["analysis"], args.export)
+                
+        except Exception as e:
+            print(f"Deduplication failed: {e}")
+    
     def setup_token(self, args) -> None:
         """Setup API token"""
         if args.token:
@@ -276,6 +367,31 @@ def main():
     # Tag statistics
     tag_stats_parser = subparsers.add_parser('tag-stats', help='Tag statistics')
     
+    # Deduplication analysis
+    dedup_analyze_parser = subparsers.add_parser('analyze-duplicates', 
+                                                help='Analyze duplicate documents (no deletion)')
+    dedup_analyze_parser.add_argument('--location', 
+                                     choices=['new', 'later', 'archive', 'feed'],
+                                     help='Limit analysis to specific location')
+    dedup_analyze_parser.add_argument('--format', choices=['text', 'json'], 
+                                     default='text', help='Output format')
+    dedup_analyze_parser.add_argument('--export', help='Export analysis report to specified file')
+    
+    # Deduplication execution
+    dedup_remove_parser = subparsers.add_parser('remove-duplicates', 
+                                               help='Execute deduplication operation')
+    dedup_remove_parser.add_argument('--location', 
+                                    choices=['new', 'later', 'archive', 'feed'],
+                                    help='Limit processing to specific location')
+    dedup_remove_parser.add_argument('--dry-run', action='store_true', 
+                                    default=True, help='Preview mode (default)')
+    dedup_remove_parser.add_argument('--execute', dest='dry_run', 
+                                    action='store_false', 
+                                    help='Actually execute deletion (disable preview mode)')
+    dedup_remove_parser.add_argument('--force', action='store_true',
+                                    help='Auto-confirm without asking user')
+    dedup_remove_parser.add_argument('--export', help='Export processing report to specified file')
+    
     # Setup token
     setup_parser = subparsers.add_parser('setup-token', help='Setup API token')
     setup_parser.add_argument('--token', help='Readwise API token')
@@ -320,6 +436,8 @@ def main():
         'export': cli.export_documents,
         'tags': cli.list_tags,
         'tag-stats': cli.tag_stats,
+        'analyze-duplicates': cli.analyze_duplicates,
+        'remove-duplicates': cli.remove_duplicates,
     }
     
     if args.command in command_map:

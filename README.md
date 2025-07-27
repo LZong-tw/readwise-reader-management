@@ -6,6 +6,7 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 
 - ✅ **Document Management**: Add, list, search, update, delete documents
 - ✅ **Tag Management**: List tags, search tags, get tag statistics
+- ✅ **Document Deduplication**: Smart duplicate detection and removal with quality scoring
 - ✅ **Multiple Interfaces**: Command Line Interface (CLI) and Web Interface
 - ✅ **Document Organization**: Support for new, later, archive, feed location management
 - ✅ **Statistics**: Document and tag usage statistics
@@ -180,6 +181,40 @@ python cli.py export
 python cli.py export --location archive --output my_archive.json
 ```
 
+#### Document Deduplication
+
+The deduplication feature intelligently identifies and removes duplicate documents using URL normalization, title similarity matching, and metadata quality scoring.
+
+**Analyze Duplicates**
+```bash
+# Analyze all documents for duplicates
+python cli.py analyze-duplicates
+
+# Analyze specific location only
+python cli.py analyze-duplicates --location new
+
+# Export analysis report
+python cli.py analyze-duplicates --export analysis_report.json
+```
+
+**Remove Duplicates**
+```bash
+# Preview mode (default - shows what would be deleted)
+python cli.py remove-duplicates
+
+# Actually execute deletion
+python cli.py remove-duplicates --execute
+
+# Auto-confirm without prompting
+python cli.py remove-duplicates --execute --force
+```
+
+**Deduplication Features:**
+- **Smart Detection**: URL normalization (removes tracking parameters) and title similarity matching
+- **Quality Scoring**: Evaluates documents based on title, author, summary, tags, and other metadata
+- **Safe Operation**: Preview mode by default, requires confirmation before deletion
+- **Detailed Reports**: Shows which documents will be kept/removed with quality scores
+
 ### Web Interface
 
 #### Start Web Server
@@ -206,8 +241,9 @@ This tool implements all features of the [Readwise Reader API](https://readwise.
 | POST /save/ | `add` | ✅ Add Document Page |
 | GET /list/ | `list`, `search` | ✅ Document List Page |
 | PATCH /update/ | `update` | ✅ Edit Document Feature |
-| DELETE /delete/ | `delete` | ✅ Delete Document Feature |
+| DELETE /delete/ | `delete`, `remove-duplicates` | ✅ Delete Document Feature |
 | GET /tags/ | `tags` | ✅ Tag Management Page |
+| Custom | `analyze-duplicates` | 🔄 Planned |
 
 ## File Structure
 
@@ -216,6 +252,7 @@ readwise-reader-management/
 ├── config.py              # Configuration management
 ├── readwise_client.py     # API client
 ├── document_manager.py    # Document manager
+├── document_deduplicator.py # Document deduplication
 ├── tag_manager.py         # Tag manager
 ├── cli.py                 # Command line interface
 ├── web_app.py             # Web application
@@ -230,6 +267,7 @@ readwise-reader-management/
     ├── test_config.py     # Configuration tests
     ├── test_readwise_client.py  # API client tests
     ├── test_document_manager.py # Document manager tests
+    ├── test_document_deduplicator.py # Deduplication tests
     ├── test_tag_manager.py      # Tag manager tests
     ├── test_cli.py        # CLI tests
     └── test_web_app.py    # Web application tests
