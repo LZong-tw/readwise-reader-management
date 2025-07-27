@@ -10,4 +10,7 @@
  - [x] Auto save output into CSV
     - List from Readwise
     - Execution results
+ - [ ] Deduplication method: should based on the list result of CSV
+    - Compare the source_url without http/https
+    - Save duplicate list into CSV
  - [ ] WebUI
