@@ -230,7 +230,7 @@ python cli.py analyze-csv-duplicates your_file.csv --verbose --export duplicates
 - **Fast Processing**: Analyzes large CSV files without API calls
 - **CSV Export**: Saves duplicate groups with metadata for further processing
 - **Group Organization**: Groups duplicates by normalized URL with row numbers
-- **Complete Metadata**: Includes id, title, author, created_at, location for each duplicate
+- **Complete Metadata**: Includes id, title, source_url, author, source, notes, tags, created_at, location for each duplicate
 
 **Workflow Example:**
 ```bash

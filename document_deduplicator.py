@@ -445,7 +445,7 @@ class DocumentDeduplicator:
         
         try:
             with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-                fieldnames = ['group_id', 'normalized_url', 'row_number', 'id', 'title', 'source_url', 'author', 'created_at', 'location']
+                fieldnames = ['group_id', 'normalized_url', 'row_number', 'id', 'title', 'source_url', 'author', 'source', 'notes', 'tags', 'created_at', 'location']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
                 
@@ -460,6 +460,9 @@ class DocumentDeduplicator:
                             'title': row_data.get('title', ''),
                             'source_url': row_data.get('source_url', ''),
                             'author': row_data.get('author', ''),
+                            'source': row_data.get('source', ''),
+                            'notes': row_data.get('notes', ''),
+                            'tags': row_data.get('tags', ''),
                             'created_at': row_data.get('created_at', ''),
                             'location': row_data.get('location', '')
                         })
