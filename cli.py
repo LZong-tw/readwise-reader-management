@@ -430,6 +430,73 @@ class ReadwiseCLI:
             import traceback
             traceback.print_exc()
 
+    def execute_deletion(self, args) -> None:
+        """Execute deletion plan from CSV file"""
+        from document_deduplicator import DocumentDeduplicator
+        import os
+        
+        try:
+            safe_print("Initializing deletion executor...")
+            deduplicator = DocumentDeduplicator(self.client)
+            
+            # Check if file exists
+            if not os.path.exists(args.csv_file):
+                safe_print(f"Error: File not found: {args.csv_file}")
+                return
+            
+            # Determine if this is a dry run or actual execution
+            dry_run = not args.execute
+            
+            # Safety checks for actual execution
+            if args.execute and not args.force:
+                safe_print("\n⚠️  WARNING: You are about to execute ACTUAL DELETIONS!")
+                safe_print("This will permanently delete documents from your Readwise Reader.")
+                safe_print("This action CANNOT be undone.")
+                safe_print("\nPlease review your deletion plan carefully before proceeding.")
+                
+                confirmation = input("\nType 'DELETE' to confirm execution: ")
+                if confirmation != 'DELETE':
+                    safe_print("Operation cancelled.")
+                    return
+            
+            # Execute deletion plan
+            result = deduplicator.execute_deletion_plan(
+                args.csv_file, 
+                dry_run=dry_run, 
+                batch_size=args.batch_size
+            )
+            
+            if result.get("error"):
+                safe_print(f"Error: {result['error']}")
+                return
+            
+            # Show results
+            if dry_run:
+                safe_print(f"\n=== DRY RUN COMPLETED ===")
+                safe_print(f"Found {result.get('total_candidates', 0)} documents marked for deletion")
+                safe_print(f"Previewed {result.get('preview_shown', 0)} documents")
+                safe_print("\nTo execute actual deletions, use: --execute")
+                safe_print("WARNING: Add --force to skip confirmation prompts")
+            else:
+                safe_print(f"\n=== EXECUTION COMPLETED ===")
+                safe_print(f"Total processed: {result.get('processed', 0)}")
+                safe_print(f"Successful deletions: {result.get('successful_deletions', 0)}")
+                safe_print(f"Failed deletions: {result.get('failed_deletions', 0)}")
+                
+                if result.get('success_rate'):
+                    safe_print(f"Success rate: {result.get('success_rate', 0)*100:.1f}%")
+                
+                if result.get('report_file'):
+                    safe_print(f"Execution report saved: {result['report_file']}")
+                
+                if result.get('errors'):
+                    safe_print(f"\nWarning: {len(result['errors'])} errors occurred during execution")
+        
+        except Exception as e:
+            safe_print(f"Error during deletion execution: {e}")
+            import traceback
+            traceback.print_exc()
+
     def setup_token(self, args) -> None:
         """Setup API token"""
         if args.token:
@@ -565,6 +632,19 @@ def main():
     plan_deletion_parser.add_argument('--verbose', action='store_true',
                                      help='Show detailed analysis of each group')
     
+    # Execute deletion plan
+    execute_deletion_parser = subparsers.add_parser('execute-deletion', 
+                                                   help='Execute deletion plan from CSV file')
+    execute_deletion_parser.add_argument('csv_file', help='Path to deletion plan CSV file (e.g., readwise_deletion_plan_*.csv)')
+    execute_deletion_parser.add_argument('--dry-run', action='store_true', default=True,
+                                        help='Preview deletions without executing (default)')
+    execute_deletion_parser.add_argument('--execute', action='store_true',
+                                        help='Actually execute deletions (WARNING: irreversible)')
+    execute_deletion_parser.add_argument('--batch-size', type=int, default=10,
+                                        help='Number of documents to process per batch (default: 10)')
+    execute_deletion_parser.add_argument('--force', action='store_true',
+                                        help='Skip safety confirmation prompts')
+    
     # Setup token
     setup_parser = subparsers.add_parser('setup-token', help='Setup API token')
     setup_parser.add_argument('--token', help='Readwise API token')
@@ -613,6 +693,7 @@ def main():
         'remove-duplicates': cli.remove_duplicates,
         'analyze-csv-duplicates': cli.analyze_csv_duplicates,
         'plan-deletion': cli.plan_deletion,
+        'execute-deletion': cli.execute_deletion,
     }
     
     if args.command in command_map:

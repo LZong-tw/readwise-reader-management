@@ -678,3 +678,145 @@ class DocumentDeduplicator:
             return "Has tags (preferred among tags)"
         else:
             return "Oldest creation date" 
+
+    def execute_deletion_plan(self, csv_file_path: str, dry_run: bool = True, batch_size: int = 10) -> Dict[str, Any]:
+        """Execute deletion plan from CSV file"""
+        import csv
+        import time
+        from datetime import datetime
+        
+        safe_print(f"{'[DRY RUN] ' if dry_run else ''}Executing deletion plan from: {csv_file_path}")
+        
+        deletion_candidates = []
+        
+        # Read deletion plan CSV
+        try:
+            with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row.get('action', '').upper() == 'DELETE':
+                        deletion_candidates.append({
+                            'document_id': row.get('document_id', ''),
+                            'title': row.get('title', ''),
+                            'source_url': row.get('source_url', ''),
+                            'reason': row.get('reason', ''),
+                            'group_id': row.get('group_id', '')
+                        })
+        except Exception as e:
+            return {"error": f"Failed to read CSV file: {e}"}
+        
+        if not deletion_candidates:
+            safe_print("No documents marked for deletion found in the plan.")
+            return {
+                "total_candidates": 0,
+                "processed": 0,
+                "successful_deletions": 0,
+                "failed_deletions": 0,
+                "errors": []
+            }
+        
+        safe_print(f"Found {len(deletion_candidates)} documents marked for deletion")
+        
+        if dry_run:
+            safe_print("\n=== DRY RUN MODE - NO ACTUAL DELETIONS WILL BE PERFORMED ===")
+            safe_print("Documents that would be deleted:")
+            for i, doc in enumerate(deletion_candidates[:10], 1):  # Show first 10
+                safe_print(f"  {i}. [{doc['group_id']}] {doc['title'][:60]}...")
+                safe_print(f"     ID: {doc['document_id']}")
+                safe_print(f"     Reason: {doc['reason']}")
+                safe_print(f"     URL: {doc['source_url'][:80]}...")
+                safe_print("")
+            
+            if len(deletion_candidates) > 10:
+                safe_print(f"... and {len(deletion_candidates) - 10} more documents")
+            
+            return {
+                "dry_run": True,
+                "total_candidates": len(deletion_candidates),
+                "preview_shown": min(10, len(deletion_candidates))
+            }
+        
+        # Execute actual deletions
+        safe_print(f"\n⚠️  WARNING: About to delete {len(deletion_candidates)} documents!")
+        safe_print("This action cannot be undone.")
+        
+        successful_deletions = 0
+        failed_deletions = 0
+        errors = []
+        
+        # Process in batches to respect rate limits
+        for i in range(0, len(deletion_candidates), batch_size):
+            batch = deletion_candidates[i:i+batch_size]
+            safe_print(f"\nProcessing batch {i//batch_size + 1}/{(len(deletion_candidates) + batch_size - 1)//batch_size}")
+            
+            for doc in batch:
+                try:
+                    safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
+                    result = self.client.delete_document(doc['document_id'])
+                    
+                    if result:
+                        successful_deletions += 1
+                        safe_print(f"  ✅ Deleted successfully")
+                    else:
+                        failed_deletions += 1
+                        error_msg = "API returned failure status"
+                        errors.append(f"Document {doc['document_id']}: {error_msg}")
+                        safe_print(f"  ❌ Failed: {error_msg}")
+                
+                except Exception as e:
+                    failed_deletions += 1
+                    error_msg = str(e)
+                    errors.append(f"Document {doc['document_id']}: {error_msg}")
+                    safe_print(f"  ❌ Exception: {error_msg}")
+                
+                # Small delay to respect rate limits
+                time.sleep(0.1)
+            
+            # Longer delay between batches
+            if i + batch_size < len(deletion_candidates):
+                safe_print(f"Waiting between batches (rate limit protection)...")
+                time.sleep(2)
+        
+        # Generate execution report
+        safe_print(f"\n=== DELETION EXECUTION COMPLETED ===")
+        safe_print(f"Total candidates: {len(deletion_candidates)}")
+        safe_print(f"Successful deletions: {successful_deletions}")
+        safe_print(f"Failed deletions: {failed_deletions}")
+        
+        if errors:
+            safe_print(f"\nErrors encountered:")
+            for error in errors[:5]:  # Show first 5 errors
+                safe_print(f"  - {error}")
+            if len(errors) > 5:
+                safe_print(f"  ... and {len(errors) - 5} more errors")
+        
+        # Export execution report
+        report_data = {
+            "execution_timestamp": datetime.now().isoformat(),
+            "total_candidates": len(deletion_candidates),
+            "successful_deletions": successful_deletions,
+            "failed_deletions": failed_deletions,
+            "success_rate": f"{(successful_deletions / len(deletion_candidates) * 100):.1f}%" if deletion_candidates else "0%",
+            "errors": errors
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_filename = f"readwise_deletion_execution_{timestamp}.json"
+        
+        try:
+            import json
+            with open(report_filename, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, indent=2, ensure_ascii=False)
+            safe_print(f"Execution report saved to: {report_filename}")
+        except Exception as e:
+            safe_print(f"Warning: Could not save execution report: {e}")
+        
+        return {
+            "total_candidates": len(deletion_candidates),
+            "processed": len(deletion_candidates),
+            "successful_deletions": successful_deletions,
+            "failed_deletions": failed_deletions,
+            "success_rate": successful_deletions / len(deletion_candidates) if deletion_candidates else 0,
+            "errors": errors,
+            "report_file": report_filename
+        } 

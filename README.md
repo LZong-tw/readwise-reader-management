@@ -218,14 +218,31 @@ python cli.py plan-deletion duplicates.csv --export deletion_plan.csv
 python cli.py plan-deletion duplicates.csv --verbose
 ```
 
+**Step 3: Execute Deletion Plan**
+```bash
+# Preview deletions (safe, no actual changes)
+python cli.py execute-deletion deletion_plan.csv --dry-run
+
+# Execute actual deletions (WARNING: irreversible)
+python cli.py execute-deletion deletion_plan.csv --execute
+
+# Execute with custom batch size and skip confirmation
+python cli.py execute-deletion deletion_plan.csv --execute --batch-size 5 --force
+```
+
 **Priority Rules for Keeping Documents:**
 1. **Documents with NOTES** (if only some have notes)
 2. **Documents with TAGS** (if only some have tags)  
 3. **Older Documents** (earliest `created_at` time)
 
-**Output:** The deletion plan generates a CSV file with KEEP/DELETE actions and reasons for each document.
+**Safety Features:**
+- **Dry-run mode** (default): Preview deletions without making changes
+- **Confirmation prompts**: Type 'DELETE' to confirm execution
+- **Batch processing**: Respects API rate limits (20-50 requests/minute)
+- **Execution reports**: JSON reports with detailed results
+- **Error handling**: Continues processing even if some deletions fail
 
-⚠️ **Safety:** Always review the generated plan before executing any deletions.
+⚠️ **Safety:** Always review the generated plan and use `--dry-run` before executing deletions.
 
 ### Web Interface
 
