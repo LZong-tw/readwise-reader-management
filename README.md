@@ -10,7 +10,9 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 - ✅ **Multiple Interfaces**: Command Line Interface (CLI) and Web Interface
 - ✅ **Document Organization**: Support for new, later, archive, feed location management
 - ✅ **Statistics**: Document and tag usage statistics
-- ✅ **Export**: Export documents to JSON format
+- ✅ **Export**: Export documents to JSON and CSV formats with complete metadata
+- ✅ **Real-time Progress**: Live progress display for large document operations
+- ✅ **Smart CSV Output**: Automatic CSV export for large result sets (200+ documents)
 - ✅ **Search**: Title-based document search
 - ✅ **Comprehensive Testing**: Unit tests with coverage reporting
 
@@ -116,17 +118,28 @@ python cli.py add "https://example.com/article" --title "Article Title" --tags "
 
 **List Documents**
 ```bash
-# List all documents
+# List all documents (shows real-time progress for large collections)
 python cli.py list
 
 # List documents in specific location
 python cli.py list --location later
 
-# Limit count
+# Limit count (helpful for testing or preview)
 python cli.py list --limit 10
 
-# Verbose mode
+# Verbose mode with detailed information
 python cli.py list --verbose
+
+# Different output formats
+python cli.py list --format text     # Default: terminal output
+python cli.py list --format json     # JSON format
+python cli.py list --format csv      # CSV file export
+
+# Disable progress display (for scripting)
+python cli.py list --no-progress
+
+# Large collections are automatically exported to CSV
+# When result count > 200, output automatically switches to CSV
 ```
 
 **Search Documents**
@@ -174,11 +187,20 @@ python cli.py stats --include-tags
 
 **Export Documents**
 ```bash
-# Export all documents
+# Export all documents to JSON
 python cli.py export
 
-# Export documents from specific location
+# Export documents from specific location to JSON
 python cli.py export --location archive --output my_archive.json
+
+# Export documents to CSV with complete metadata (23 fields)
+python cli.py list --format csv
+
+# Export specific location to CSV
+python cli.py list --location archive --format csv
+
+# Large collections (>200 docs) automatically export to CSV
+python cli.py list  # Auto-creates CSV if >200 results
 ```
 
 #### Document Deduplication
@@ -237,6 +259,47 @@ python cli.py remove-duplicates --location new --limit 100 --execute
 - **Recommended workflow**: Start with `--limit 100` to understand duplicate patterns, then increase or remove limit
 - **API rate limits**: The tool automatically handles Readwise API rate limits with delays between requests
 
+#### Progress Display and Large Collections
+
+The tool provides real-time progress feedback for operations involving multiple API requests:
+
+**Real-time Progress Features:**
+- 📚 **Live Status**: Shows current operation status with emoji indicators
+- ⏳ **Countdown Timers**: Real-time countdown for API rate limiting delays
+- 📊 **Statistics**: Live updates of documents processed, elapsed time, and averages
+- 🔗 **Batch Progress**: Clear indication of current batch and total progress
+- 🛑 **Smart Limits**: Automatic stopping when reaching specified limits
+
+**Smart CSV Export:**
+- **Automatic**: When listing >200 documents, automatically exports to CSV instead of terminal output
+- **Complete Metadata**: CSV includes all 23 Readwise API fields (id, title, author, summary, tags, timestamps, etc.)
+- **Manual Export**: Use `--format csv` to force CSV output for any result size
+- **UTF-8 Encoding**: Full Unicode support for international content
+- **Clean Format**: Newlines converted to spaces for proper CSV compatibility
+
+**CSV Fields Include:**
+```
+id, url, source_url, title, author, summary, site_name, word_count, 
+published_date, image_url, notes, category, location, source, 
+created_at, updated_at, saved_at, last_moved_at, first_opened_at, 
+last_opened_at, reading_progress, parent_id, tags
+```
+
+**Usage Examples:**
+```bash
+# View progress for large operations
+python cli.py list --location archive  # Shows real-time progress
+
+# Disable progress for automation
+python cli.py list --no-progress > script_output.txt
+
+# Force CSV export
+python cli.py list --limit 50 --format csv
+
+# Large collection handling
+python cli.py list  # Auto-exports to CSV if >200 results
+```
+
 ### Web Interface
 
 #### Start Web Server
@@ -261,11 +324,12 @@ This tool implements all features of the [Readwise Reader API](https://readwise.
 | API Endpoint | CLI Command | Web Feature |
 |---------|---------|---------|
 | POST /save/ | `add` | ✅ Add Document Page |
-| GET /list/ | `list`, `search` | ✅ Document List Page |
+| GET /list/ | `list`, `search` (with CSV export) | ✅ Document List Page |
 | PATCH /update/ | `update` | ✅ Edit Document Feature |
 | DELETE /delete/ | `delete`, `remove-duplicates` | ✅ Delete Document Feature |
 | GET /tags/ | `tags` | ✅ Tag Management Page |
 | Custom | `analyze-duplicates` | 🔄 Planned |
+| Custom | CSV Export (23 metadata fields) | 🔄 Planned |
 
 ## File Structure
 
