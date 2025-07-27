@@ -197,8 +197,13 @@ class ReadwiseCLI:
             
             # Get documents based on parameters
             documents = None
-            if args.location:
-                documents = self.doc_manager.get_documents(location=args.location)
+            if args.location or args.limit:
+                documents = self.doc_manager.get_documents(
+                    location=args.location, 
+                    limit=args.limit
+                )
+                if args.limit:
+                    safe_print(f"Processing limited to {args.limit} documents")
             
             analysis = self.deduplicator.analyze_duplicates(documents)
             
@@ -208,11 +213,15 @@ class ReadwiseCLI:
             
             if analysis["duplicate_groups"] == 0:
                 safe_print("No duplicate documents found")
+                if args.limit:
+                    safe_print("Note: Analysis was limited - try without --limit for complete results")
                 return
             
             # Display analysis results
             safe_print(f"\n=== Duplicate Document Analysis Results ===")
             safe_print(f"Total documents: {analysis['total_documents']}")
+            if args.limit:
+                safe_print(f"(Limited to {args.limit} documents - use without --limit for complete analysis)")
             safe_print(f"Duplicate groups: {analysis['duplicate_groups']}")
             safe_print(f"Duplicates to remove: {analysis['total_duplicates']}")
             
@@ -245,8 +254,13 @@ class ReadwiseCLI:
             
             # Get documents based on parameters
             documents = None
-            if args.location:
-                documents = self.doc_manager.get_documents(location=args.location)
+            if args.location or args.limit:
+                documents = self.doc_manager.get_documents(
+                    location=args.location,
+                    limit=args.limit
+                )
+                if args.limit:
+                    safe_print(f"Processing limited to {args.limit} documents")
             
             result = self.deduplicator.remove_duplicates(
                 documents=documents,
@@ -260,6 +274,8 @@ class ReadwiseCLI:
             
             if result.get("message"):
                 safe_print(result["message"])
+                if args.limit and "No duplicate documents found" in result["message"]:
+                    safe_print("Note: Processing was limited - try without --limit for complete results")
                 return
             
             # Display results
@@ -373,6 +389,8 @@ def main():
     dedup_analyze_parser.add_argument('--location', 
                                      choices=['new', 'later', 'archive', 'feed'],
                                      help='Limit analysis to specific location')
+    dedup_analyze_parser.add_argument('--limit', type=int,
+                                     help='Limit number of documents to analyze')
     dedup_analyze_parser.add_argument('--format', choices=['text', 'json'], 
                                      default='text', help='Output format')
     dedup_analyze_parser.add_argument('--export', help='Export analysis report to specified file')
@@ -383,6 +401,8 @@ def main():
     dedup_remove_parser.add_argument('--location', 
                                     choices=['new', 'later', 'archive', 'feed'],
                                     help='Limit processing to specific location')
+    dedup_remove_parser.add_argument('--limit', type=int,
+                                    help='Limit number of documents to process')
     dedup_remove_parser.add_argument('--dry-run', action='store_true', 
                                     default=True, help='Preview mode (default)')
     dedup_remove_parser.add_argument('--execute', dest='dry_run', 
