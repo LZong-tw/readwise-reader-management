@@ -359,6 +359,77 @@ class ReadwiseCLI:
             import traceback
             traceback.print_exc()
 
+    def plan_deletion(self, args) -> None:
+        """Create deletion plan from duplicate analysis CSV file"""
+        from document_deduplicator import DocumentDeduplicator
+        
+        try:
+            safe_print("Initializing deletion plan analyzer...")
+            deduplicator = DocumentDeduplicator(self.client)
+            
+            # Analyze deletion plan
+            analysis = deduplicator.analyze_deletion_plan(args.csv_file)
+            
+            if analysis.get("error"):
+                safe_print(f"Error: {analysis['error']}")
+                return
+            
+            # Display results
+            safe_print(f"\n=== Deletion Plan Analysis ===")
+            safe_print(f"CSV file: {analysis['csv_file']}")
+            safe_print(f"Total documents: {analysis['total_documents']}")
+            safe_print(f"Duplicate groups: {analysis['duplicate_groups']}")
+            safe_print(f"Total documents to delete: {analysis['total_to_delete']}")
+            
+            if analysis['duplicate_groups'] == 0:
+                safe_print("No duplicate groups found in CSV file")
+                return
+            
+            # Show detailed analysis if requested
+            if args.verbose:
+                safe_print(f"\n=== Deletion Plan Details ===")
+                for group in analysis['groups']:
+                    safe_print(f"\nGroup {group['group_id']}: {group['normalized_url']}")
+                    safe_print(f"  Total documents: {group['total_documents']}")
+                    safe_print(f"  To delete: {group['deletion_count']}")
+                    
+                    # Show what to keep
+                    keep_doc = group['keep_document']
+                    keep_title = keep_doc.get('title', 'No title')[:50]
+                    safe_print(f"  KEEP: {keep_title}...")
+                    safe_print(f"    ID: {keep_doc.get('id', 'N/A')}")
+                    safe_print(f"    Notes: {'Yes' if keep_doc.get('notes', '').strip() else 'No'}")
+                    safe_print(f"    Tags: {'Yes' if keep_doc.get('tags', '').strip() else 'No'}")
+                    safe_print(f"    Created: {keep_doc.get('created_at', 'N/A')}")
+                    
+                    # Show what to delete
+                    for delete_doc in group['delete_documents']:
+                        delete_title = delete_doc.get('title', 'No title')[:50]
+                        safe_print(f"  DELETE: {delete_title}...")
+                        safe_print(f"    ID: {delete_doc.get('id', 'N/A')}")
+                        safe_print(f"    Notes: {'Yes' if delete_doc.get('notes', '').strip() else 'No'}")
+                        safe_print(f"    Tags: {'Yes' if delete_doc.get('tags', '').strip() else 'No'}")
+                        safe_print(f"    Created: {delete_doc.get('created_at', 'N/A')}")
+            
+            # Export deletion plan to CSV
+            if args.export:
+                output_file = args.export
+            else:
+                output_file = None
+            
+            csv_file = deduplicator.export_deletion_plan(analysis, output_file)
+            if csv_file:
+                safe_print(f"\n✅ Deletion plan saved to: {csv_file}")
+                safe_print(f"💡 Review the plan before executing any deletions")
+                safe_print(f"📋 Plan contains:")
+                safe_print(f"   - KEEP actions: {analysis['duplicate_groups']} documents to preserve")
+                safe_print(f"   - DELETE actions: {analysis['total_to_delete']} documents to remove")
+            
+        except Exception as e:
+            safe_print(f"Error during deletion plan analysis: {e}")
+            import traceback
+            traceback.print_exc()
+
     def setup_token(self, args) -> None:
         """Setup API token"""
         if args.token:
@@ -486,6 +557,14 @@ def main():
                                  help='Show detailed duplicate groups')
     csv_dedup_parser.add_argument('--export', help='Export duplicate list to specified CSV file')
     
+    # Deletion plan analysis
+    plan_deletion_parser = subparsers.add_parser('plan-deletion', 
+                                                help='Create deletion plan from duplicate analysis CSV')
+    plan_deletion_parser.add_argument('csv_file', help='Path to duplicates CSV file (e.g., readwise_duplicates_*.csv)')
+    plan_deletion_parser.add_argument('--export', help='Export deletion plan to specified CSV file')
+    plan_deletion_parser.add_argument('--verbose', action='store_true',
+                                     help='Show detailed analysis of each group')
+    
     # Setup token
     setup_parser = subparsers.add_parser('setup-token', help='Setup API token')
     setup_parser.add_argument('--token', help='Readwise API token')
@@ -533,6 +612,7 @@ def main():
         'analyze-duplicates': cli.analyze_duplicates,
         'remove-duplicates': cli.remove_duplicates,
         'analyze-csv-duplicates': cli.analyze_csv_duplicates,
+        'plan-deletion': cli.plan_deletion,
     }
     
     if args.command in command_map:

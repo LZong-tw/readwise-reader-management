@@ -485,3 +485,196 @@ class DocumentDeduplicator:
         
         safe_print(f"Analysis report exported to: {filename}")
         return filename 
+
+    def analyze_deletion_plan(self, csv_file_path: str) -> Dict[str, Any]:
+        """Analyze duplicates CSV file and create deletion plan based on NOTE, TAG and created_at priority"""
+        import csv
+        from datetime import datetime
+        
+        safe_print(f"Analyzing deletion plan from CSV file: {csv_file_path}")
+        
+        groups = {}
+        all_documents = []
+        
+        # Read CSV file
+        try:
+            with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    all_documents.append(row)
+                    group_id = row.get('group_id', '')
+                    if group_id:
+                        if group_id not in groups:
+                            groups[group_id] = []
+                        groups[group_id].append(row)
+        except Exception as e:
+            return {"error": f"Failed to read CSV file: {e}"}
+        
+        # Analyze each group and determine what to keep/delete
+        deletion_plan = []
+        total_to_delete = 0
+        
+        for group_id, documents in groups.items():
+            if len(documents) <= 1:
+                continue  # Skip groups with only one document
+            
+            # Find the best document to keep based on priority
+            best_document = self._select_best_document_to_keep(documents)
+            
+            # Documents to delete
+            documents_to_delete = [doc for doc in documents if doc['id'] != best_document['id']]
+            
+            group_plan = {
+                'group_id': group_id,
+                'normalized_url': documents[0].get('normalized_url', ''),
+                'total_documents': len(documents),
+                'keep_document': best_document,
+                'delete_documents': documents_to_delete,
+                'deletion_count': len(documents_to_delete)
+            }
+            
+            deletion_plan.append(group_plan)
+            total_to_delete += len(documents_to_delete)
+        
+        analysis_result = {
+            "csv_file": csv_file_path,
+            "total_documents": len(all_documents),
+            "duplicate_groups": len(deletion_plan),
+            "total_to_delete": total_to_delete,
+            "groups": deletion_plan
+        }
+        
+        safe_print(f"Created deletion plan for {len(deletion_plan)} groups, planning to delete {total_to_delete} documents")
+        
+        return analysis_result
+    
+    def _select_best_document_to_keep(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Select the best document to keep based on NOTE, TAG, and created_at priority"""
+        from datetime import datetime
+        
+        # Priority 1: Documents with notes (non-empty notes field)
+        docs_with_notes = [doc for doc in documents if doc.get('notes', '').strip()]
+        docs_without_notes = [doc for doc in documents if not doc.get('notes', '').strip()]
+        
+        # If only some documents have notes, prefer those with notes
+        if docs_with_notes and docs_without_notes:
+            if len(docs_with_notes) == 1:
+                return docs_with_notes[0]
+            # If multiple have notes, continue to next criteria with this subset
+            documents = docs_with_notes
+        # If all have notes or all don't have notes, continue with all documents
+        
+        # Priority 2: Documents with tags (non-empty tags field)
+        docs_with_tags = [doc for doc in documents if doc.get('tags', '').strip()]
+        docs_without_tags = [doc for doc in documents if not doc.get('tags', '').strip()]
+        
+        # If only some documents have tags, prefer those with tags
+        if docs_with_tags and docs_without_tags:
+            if len(docs_with_tags) == 1:
+                return docs_with_tags[0]
+            # If multiple have tags, continue to next criteria with this subset
+            documents = docs_with_tags
+        # If all have tags or all don't have tags, continue with all documents
+        
+        # Priority 3: Oldest document (earliest created_at)
+        documents_with_dates = []
+        for doc in documents:
+            created_at = doc.get('created_at', '').strip()
+            if created_at:
+                try:
+                    # Try to parse the date
+                    # Common formats: ISO format, or readwise format
+                    if 'T' in created_at:
+                        # ISO format like "2023-07-27T10:30:00Z"
+                        date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    else:
+                        # Try other common formats
+                        date_obj = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+                    
+                    documents_with_dates.append((doc, date_obj))
+                except (ValueError, TypeError):
+                    # If date parsing fails, treat as no date
+                    pass
+        
+        if documents_with_dates:
+            # Sort by date ascending (oldest first)
+            documents_with_dates.sort(key=lambda x: x[1], reverse=False)
+            return documents_with_dates[0][0]
+        
+        # Fallback: return the first document if no other criteria can be applied
+        return documents[0]
+    
+    def export_deletion_plan(self, analysis: Dict[str, Any], output_file: Optional[str] = None) -> str:
+        """Export deletion plan to CSV file"""
+        import csv
+        
+        if not output_file:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"readwise_deletion_plan_{timestamp}.csv"
+        
+        try:
+            with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = [
+                    'group_id', 'action', 'document_id', 'title', 'source_url', 
+                    'author', 'notes', 'tags', 'created_at', 'reason'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for group in analysis['groups']:
+                    # Write the document to keep
+                    keep_doc = group['keep_document']
+                    writer.writerow({
+                        'group_id': group['group_id'],
+                        'action': 'KEEP',
+                        'document_id': keep_doc.get('id', ''),
+                        'title': keep_doc.get('title', ''),
+                        'source_url': keep_doc.get('source_url', ''),
+                        'author': keep_doc.get('author', ''),
+                        'notes': keep_doc.get('notes', ''),
+                        'tags': keep_doc.get('tags', ''),
+                        'created_at': keep_doc.get('created_at', ''),
+                        'reason': self._get_keep_reason(keep_doc, group['delete_documents'])
+                    })
+                    
+                    # Write the documents to delete
+                    for delete_doc in group['delete_documents']:
+                        writer.writerow({
+                            'group_id': group['group_id'],
+                            'action': 'DELETE',
+                            'document_id': delete_doc.get('id', ''),
+                            'title': delete_doc.get('title', ''),
+                            'source_url': delete_doc.get('source_url', ''),
+                            'author': delete_doc.get('author', ''),
+                            'notes': delete_doc.get('notes', ''),
+                            'tags': delete_doc.get('tags', ''),
+                            'created_at': delete_doc.get('created_at', ''),
+                            'reason': 'Duplicate document'
+                        })
+            
+            safe_print(f"Deletion plan exported to: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            safe_print(f"Failed to export deletion plan to CSV: {e}")
+            return ""
+    
+    def _get_keep_reason(self, keep_doc: Dict[str, Any], delete_docs: List[Dict[str, Any]]) -> str:
+        """Generate reason why this document was selected to keep"""
+        has_notes = bool(keep_doc.get('notes', '').strip())
+        has_tags = bool(keep_doc.get('tags', '').strip())
+        
+        # Check if any documents being deleted have notes/tags
+        deleted_have_notes = any(bool(doc.get('notes', '').strip()) for doc in delete_docs)
+        deleted_have_tags = any(bool(doc.get('tags', '').strip()) for doc in delete_docs)
+        
+        if has_notes and not deleted_have_notes:
+            return "Has notes"
+        elif has_tags and not deleted_have_tags:
+            return "Has tags"
+        elif has_notes and deleted_have_notes:
+            return "Has notes (preferred among notes)"
+        elif has_tags and deleted_have_tags:
+            return "Has tags (preferred among tags)"
+        else:
+            return "Oldest creation date" 
