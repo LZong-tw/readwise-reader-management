@@ -7,7 +7,7 @@
     - [x] Metadata quality scoring system (title, author, summary, tags, etc.)
     - [x] CLI integration with analysis and execution modes
     - [x] Comprehensive test coverage
- - [ ] Auto save output into CSV
+ - [x] Auto save output into CSV
     - List from Readwise
     - Execution results
  - [ ] WebUI
