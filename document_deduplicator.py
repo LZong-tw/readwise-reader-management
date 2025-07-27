@@ -86,7 +86,8 @@ class DocumentDeduplicator:
         max_score = 100.0
         
         # Title quality (25 points)
-        title = document.get('title', '').strip()
+        title = document.get('title') or ''
+        title = title.strip() if title else ''
         if title:
             if len(title) > 10:
                 score += 25
@@ -96,12 +97,14 @@ class DocumentDeduplicator:
                 score += 5
         
         # Author information (15 points)
-        author = document.get('author', '').strip()
+        author = document.get('author') or ''
+        author = author.strip() if author else ''
         if author and author != 'Unknown':
             score += 15
         
         # Summary/description (20 points)
-        summary = document.get('summary', '').strip()
+        summary = document.get('summary') or ''
+        summary = summary.strip() if summary else ''
         if summary:
             if len(summary) > 100:
                 score += 20
@@ -170,7 +173,8 @@ class DocumentDeduplicator:
                     url_groups[normalized_url].append(doc)
             
             # Title grouping (for cases where URLs differ but content is same)
-            title = doc.get('title', '').strip()
+            title = doc.get('title') or ''
+            title = title.strip() if title else ''
             if title and len(title) > 10:  # Ignore titles that are too short
                 title_groups[title.lower()].append(doc)
         
