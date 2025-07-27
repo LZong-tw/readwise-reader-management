@@ -750,24 +750,51 @@ class DocumentDeduplicator:
             safe_print(f"\nProcessing batch {i//batch_size + 1}/{(len(deletion_candidates) + batch_size - 1)//batch_size}")
             
             for doc in batch:
-                try:
-                    safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
-                    result = self.client.delete_document(doc['document_id'])
-                    
-                    if result:
-                        successful_deletions += 1
-                        safe_print(f"  ✅ Deleted successfully")
-                    else:
-                        failed_deletions += 1
-                        error_msg = "API returned failure status"
-                        errors.append(f"Document {doc['document_id']}: {error_msg}")
-                        safe_print(f"  ❌ Failed: {error_msg}")
+                safe_print(f"Deleting: [{doc['group_id']}] {doc['title'][:50]}...")
                 
-                except Exception as e:
-                    failed_deletions += 1
-                    error_msg = str(e)
-                    errors.append(f"Document {doc['document_id']}: {error_msg}")
-                    safe_print(f"  ❌ Exception: {error_msg}")
+                # Implement retry logic for 429 errors (unlimited retries)
+                retry_count = 0
+                deletion_successful = False
+                
+                while not deletion_successful:
+                    try:
+                        result = self.client.delete_document(doc['document_id'])
+                        
+                        if result:
+                            successful_deletions += 1
+                            safe_print(f"  ✅ Deleted successfully")
+                            deletion_successful = True
+                        else:
+                            failed_deletions += 1
+                            error_msg = "API returned failure status"
+                            errors.append(f"Document {doc['document_id']}: {error_msg}")
+                            safe_print(f"  ❌ Failed: {error_msg}")
+                            deletion_successful = True  # Don't retry for non-429 failures
+                    
+                    except Exception as e:
+                        error_msg = str(e)
+                        
+                        # Check if this is a 429 (rate limit) error
+                        if "429" in error_msg:
+                            retry_count += 1
+                            
+                            # Try to extract Retry-After value from error message
+                            retry_after = self._extract_retry_after(e)
+                            if retry_after:
+                                safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {retry_after}s...")
+                                time.sleep(retry_after)
+                            else:
+                                # Default retry delay if no Retry-After header
+                                default_delay = 60  # 60 seconds default
+                                safe_print(f"  ⚠️  Rate limited (429). Retry #{retry_count} after {default_delay}s (default)...")
+                                time.sleep(default_delay)
+                            # Continue the loop to retry
+                        else:
+                            # Non-429 error - fail immediately
+                            failed_deletions += 1
+                            errors.append(f"Document {doc['document_id']}: {error_msg}")
+                            safe_print(f"  ❌ Exception: {error_msg}")
+                            deletion_successful = True  # Exit retry loop
                 
                 # Respect Readwise Reader API rate limit: 20 requests per minute
                 # Wait 3.5 seconds between requests to stay well under the limit
@@ -817,4 +844,27 @@ class DocumentDeduplicator:
             "success_rate": successful_deletions / len(deletion_candidates) if deletion_candidates else 0,
             "errors": errors,
             "report_file": report_filename
-        } 
+        }
+    
+    def _extract_retry_after(self, exception: Exception) -> Optional[int]:
+        """Extract Retry-After value from HTTP exception"""
+        try:
+            # Check if this is a requests HTTPError with response object
+            response = getattr(exception, 'response', None)
+            if response is not None:
+                # Get Retry-After header (can be in seconds or HTTP date format)
+                retry_after = response.headers.get('Retry-After')
+                if retry_after:
+                    try:
+                        # Try to parse as integer (seconds)
+                        return int(retry_after)
+                    except ValueError:
+                        # If not integer, might be HTTP date format
+                        # For simplicity, return None and use default delay
+                        safe_print(f"    Warning: Could not parse Retry-After header: {retry_after}")
+                        return None
+            
+            return None
+        except Exception:
+            # If any error occurs during extraction, return None
+            return None 
