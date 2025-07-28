@@ -16,7 +16,7 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/LZong-tw/readwise-reader-management.git
 cd readwise-reader-management
 ```
 
