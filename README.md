@@ -45,56 +45,6 @@ echo "your_api_token_here" > .readwise_token
 python cli.py setup-token --token your_api_token_here
 ```
 
-## Testing
-
-### Running Tests
-
-The project includes comprehensive unit tests for all major components.
-
-**Run all tests with coverage report:**
-```bash
-python -m pytest
-```
-
-**Run specific test file:**
-```bash
-python -m pytest tests/test_config.py -v
-```
-
-**Run tests with detailed output:**
-```bash
-python -m pytest -vv
-```
-
-**Run only unit tests (skip integration tests):**
-```bash
-python -m pytest -m "not integration"
-```
-
-**Use the test runner script:**
-```bash
-chmod +x run_tests.sh
-./run_tests.sh
-```
-
-### Test Coverage
-
-The tests cover:
-- Configuration management
-- API client operations
-- Document management functions
-- Tag management operations
-- CLI commands
-- Web application routes
-
-View the HTML coverage report:
-```bash
-# After running tests, open the coverage report
-open htmlcov/index.html  # macOS
-xdg-open htmlcov/index.html  # Linux
-start htmlcov/index.html  # Windows
-```
-
 ## Usage
 
 ### Command Line Interface (CLI)
@@ -298,6 +248,56 @@ readwise-reader-management/
     ├── test_tag_manager.py      # Tag manager tests
     ├── test_cli.py        # CLI tests
     └── test_web_app.py    # Web application tests
+```
+
+## Testing
+
+### Running Tests
+
+The project includes comprehensive unit tests for all major components.
+
+**Run all tests with coverage report:**
+```bash
+python -m pytest
+```
+
+**Run specific test file:**
+```bash
+python -m pytest tests/test_config.py -v
+```
+
+**Run tests with detailed output:**
+```bash
+python -m pytest -vv
+```
+
+**Run only unit tests (skip integration tests):**
+```bash
+python -m pytest -m "not integration"
+```
+
+**Use the test runner script:**
+```bash
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
+### Test Coverage
+
+The tests cover:
+- Configuration management
+- API client operations
+- Document management functions
+- Tag management operations
+- CLI commands
+- Web application routes
+
+View the HTML coverage report:
+```bash
+# After running tests, open the coverage report
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+start htmlcov/index.html  # Windows
 ```
 
 ## FAQ
