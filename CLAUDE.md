@@ -154,3 +154,4 @@ The system supports four document locations:
 
 - You should implement tests for all the new features you add.
 - You should implement or modify tests for any breaking changes you make.
+- You should check if there were any need to modify README.md or CLAUDE.md when you make changes.
