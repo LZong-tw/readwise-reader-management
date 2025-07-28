@@ -368,7 +368,8 @@ class ReadwiseCLI:
             deduplicator = DocumentDeduplicator(self.client)
             
             # Analyze deletion plan
-            analysis = deduplicator.analyze_deletion_plan(args.csv_file)
+            prefer_newer = getattr(args, 'prefer_newer', False)
+            analysis = deduplicator.analyze_deletion_plan(args.csv_file, prefer_newer=prefer_newer)
             
             if analysis.get("error"):
                 safe_print(f"Error: {analysis['error']}")
@@ -631,6 +632,8 @@ def main():
     plan_deletion_parser.add_argument('--export', help='Export deletion plan to specified CSV file')
     plan_deletion_parser.add_argument('--verbose', action='store_true',
                                      help='Show detailed analysis of each group')
+    plan_deletion_parser.add_argument('--prefer-newer', action='store_true',
+                                     help='Prefer newer documents over older ones (default: prefer older)')
     
     # Execute deletion plan
     execute_deletion_parser = subparsers.add_parser('execute-deletion', 

@@ -172,6 +172,9 @@ python cli.py plan-deletion duplicates.csv --export deletion_plan.csv
 
 # View detailed analysis
 python cli.py plan-deletion duplicates.csv --verbose
+
+# Prefer newer documents over older ones
+python cli.py plan-deletion duplicates.csv --prefer-newer --export deletion_plan.csv
 ```
 
 **Step 3: Execute Deletion Plan**
@@ -189,7 +192,9 @@ python cli.py execute-deletion deletion_plan.csv --execute --batch-size 5 --forc
 **Priority Rules for Keeping Documents:**
 1. **Documents with NOTES** (if only some have notes)
 2. **Documents with TAGS** (if only some have tags)  
-3. **Older Documents** (earliest `created_at` time)
+3. **Date Priority**: 
+   - **Older Documents** (earliest `created_at` time) - default behavior
+   - **Newer Documents** (latest `created_at` time) - use `--prefer-newer` flag
 
 **Safety Features:**
 - **Dry-run mode** (default): Preview deletions without making changes

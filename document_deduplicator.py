@@ -486,7 +486,7 @@ class DocumentDeduplicator:
         safe_print(f"Analysis report exported to: {filename}")
         return filename 
 
-    def analyze_deletion_plan(self, csv_file_path: str) -> Dict[str, Any]:
+    def analyze_deletion_plan(self, csv_file_path: str, prefer_newer: bool = False) -> Dict[str, Any]:
         """Analyze duplicates CSV file and create deletion plan based on NOTE, TAG and created_at priority"""
         import csv
         from datetime import datetime
@@ -519,7 +519,7 @@ class DocumentDeduplicator:
                 continue  # Skip groups with only one document
             
             # Find the best document to keep based on priority
-            best_document = self._select_best_document_to_keep(documents)
+            best_document = self._select_best_document_to_keep(documents, prefer_newer=prefer_newer)
             
             # Documents to delete
             documents_to_delete = [doc for doc in documents if doc['id'] != best_document['id']]
@@ -548,7 +548,7 @@ class DocumentDeduplicator:
         
         return analysis_result
     
-    def _select_best_document_to_keep(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _select_best_document_to_keep(self, documents: List[Dict[str, Any]], prefer_newer: bool = False) -> Dict[str, Any]:
         """Select the best document to keep based on NOTE, TAG, and created_at priority"""
         from datetime import datetime
         
@@ -576,7 +576,7 @@ class DocumentDeduplicator:
             documents = docs_with_tags
         # If all have tags or all don't have tags, continue with all documents
         
-        # Priority 3: Oldest document (earliest created_at)
+        # Priority 3: Date preference (older/newer based on prefer_newer flag)
         documents_with_dates = []
         for doc in documents:
             created_at = doc.get('created_at', '').strip()
@@ -597,8 +597,13 @@ class DocumentDeduplicator:
                     pass
         
         if documents_with_dates:
-            # Sort by date ascending (oldest first)
-            documents_with_dates.sort(key=lambda x: x[1], reverse=False)
+            # Sort by date based on preference
+            if prefer_newer:
+                # Sort by date descending (newest first)
+                documents_with_dates.sort(key=lambda x: x[1], reverse=True)
+            else:
+                # Sort by date ascending (oldest first) - default behavior
+                documents_with_dates.sort(key=lambda x: x[1], reverse=False)
             return documents_with_dates[0][0]
         
         # Fallback: return the first document if no other criteria can be applied

@@ -72,6 +72,7 @@ python cli.py export --location archive --output filename.json
 python cli.py list --format csv  # Export documents to CSV
 python cli.py analyze-csv-duplicates filename.csv --export duplicates.csv
 python cli.py plan-deletion duplicates.csv --export deletion_plan.csv
+python cli.py plan-deletion duplicates.csv --prefer-newer --export deletion_plan.csv  # Prefer newer documents
 python cli.py execute-deletion deletion_plan.csv --dry-run  # Preview
 python cli.py execute-deletion deletion_plan.csv --execute  # Execute
 ```
