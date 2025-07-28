@@ -67,6 +67,13 @@ python cli.py tag-stats
 # Statistics and export
 python cli.py stats --include-tags
 python cli.py export --location archive --output filename.json
+
+# Duplicate management (CSV-based workflow)
+python cli.py list --format csv  # Export documents to CSV
+python cli.py analyze-csv-duplicates filename.csv --export duplicates.csv
+python cli.py plan-deletion duplicates.csv --export deletion_plan.csv
+python cli.py execute-deletion deletion_plan.csv --dry-run  # Preview
+python cli.py execute-deletion deletion_plan.csv --execute  # Execute
 ```
 
 ## Architecture
@@ -76,6 +83,7 @@ python cli.py export --location archive --output filename.json
 - **`config.py`**: Configuration management with API token handling from environment variables or `.readwise_token` file
 - **`readwise_client.py`**: Low-level Readwise Reader API client with all HTTP endpoints
 - **`document_manager.py`**: High-level document operations (add, list, search, update, delete, stats, export)
+- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features
 - **`tag_manager.py`**: High-level tag operations (list, search, statistics, usage analysis)
 - **`cli.py`**: Command-line interface with argparse-based subcommands
 - **`web_app.py`**: Flask web application providing browser-based interface
@@ -91,6 +99,7 @@ Each component has corresponding test files:
 - `test_config.py`: Tests configuration loading and token management
 - `test_readwise_client.py`: Tests API client with mocked HTTP responses
 - `test_document_manager.py`: Tests document operations
+- `test_document_deduplicator.py`: Tests duplicate detection and deletion planning
 - `test_tag_manager.py`: Tests tag operations
 - `test_cli.py`: Tests CLI commands and argument parsing
 - `test_web_app.py`: Tests Flask routes and web endpoints
@@ -140,3 +149,8 @@ The system supports four document locations:
 - Error handling includes API rate limit and network error recovery
 - Tests mock external API calls to ensure reliable testing without API token
 - Coverage reporting helps maintain code quality and identify untested code paths
+
+## Important Notes
+
+- You should implement tests for all the new features you add.
+- You should implement or modify tests for any breaking changes you make.
