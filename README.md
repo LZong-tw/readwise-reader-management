@@ -11,6 +11,12 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 - ✅ **Export**: JSON and CSV formats with complete metadata (auto-export for large sets)
 - ✅ **Testing**: Comprehensive unit test coverage
 
+## Prerequisites
+
+- Python 3.7 or higher
+- pip (Python package installer)
+- A Readwise account with API access token
+
 ## Installation
 
 ### 1. Clone the Repository
