@@ -9,7 +9,7 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 - ✅ **Duplicate Detection**: CSV-based analysis and smart deletion planning with graceful interruption
 - ✅ **Multiple Interfaces**: Command Line Interface (CLI) and Web Interface
 - ✅ **Export**: JSON and CSV formats with complete metadata (auto-export for large sets)
-- ✅ **Cross-platform Safety**: Graceful interruption and resume support (Ctrl+C, window close, terminal close)
+- ✅ **Cross-platform Safety**: Graceful interruption and resume support (Ctrl+C always works, terminal close on Linux/macOS)
 - ✅ **Testing**: Comprehensive unit test coverage
 
 ## Prerequisites
@@ -191,9 +191,11 @@ python cli.py execute-deletion deletion_plan.csv --execute --batch-size 5 --forc
 ```
 
 **Graceful Interruption & Resume Support:**
-- **Windows**: Press `Ctrl+C`, `Ctrl+Break`, or close the console window
-- **Linux/WSL/macOS**: Press `Ctrl+C` or close the terminal window  
-- The process will finish the current document deletion safely before stopping
+- **All platforms**: `Ctrl+C` (always reliable)
+- **Windows** (PowerShell 5.x/7+, cmd.exe): Only `Ctrl+C` works - window close does NOT trigger signals
+- **Linux/WSL/macOS**: `Ctrl+C` and terminal window close should work  
+- **Important**: On Windows, closing the window will terminate the process immediately without cleanup
+- The process will finish the current document deletion safely before stopping (when using Ctrl+C)
 - **Auto-resume**: Generates updated deletion plan with remaining documents after interruption
 - **Resume execution**: Use the updated plan file to continue where you left off
 
@@ -216,7 +218,7 @@ python cli.py execute-deletion deletion_plan_updated_20241129_143022.csv --execu
 - **Dry-run mode** (default): Preview deletions without making changes
 - **Confirmation prompts**: Type 'DELETE' to confirm execution
 - **Batch processing**: Respects API rate limits (20 requests/minute for DELETE operations)
-- **Cross-platform graceful interruption**: Supports Ctrl+C, window close, and terminal close events
+- **Cross-platform graceful interruption**: Supports Ctrl+C (all platforms), terminal close (Linux/macOS only)
 - **Resume capability**: Auto-generates updated plans after interruption to continue where you left off
 - **Execution reports**: JSON reports with detailed results
 - **Error handling**: Continues processing even if some deletions fail
