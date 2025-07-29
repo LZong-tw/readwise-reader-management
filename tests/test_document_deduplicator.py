@@ -74,6 +74,34 @@ class TestDocumentDeduplicator(unittest.TestCase):
         # Test empty URL
         self.assertEqual(self.deduplicator.normalize_url(""), "")
         self.assertEqual(self.deduplicator.normalize_url(None), "")
+
+    def test_normalize_url_advanced(self):
+        """Test advanced URL normalization"""
+        # Test query string removal
+        test_cases = [
+            ("https://example.com/article?utm_source=twitter", "example.com/article"),
+            ("https://example.com/article?ref=newsletter", "example.com/article"),
+            ("https://example.com/article?utm_campaign=social&utm_source=facebook", "example.com/article"),
+            ("https://example.com/article#section1", "example.com/article"),
+            ("https://example.com/article?source=rss#top", "example.com/article"),
+            ("http://example.com/page", "example.com/page"),
+            ("https://example.com/page/", "example.com/page"),
+            ("HTTPS://EXAMPLE.COM/Article", "example.com/article"),
+            ("", ""),  # Empty URL
+        ]
+        
+        for input_url, expected in test_cases:
+            with self.subTest(url=input_url):
+                result = self.deduplicator.normalize_url_advanced(input_url)
+                self.assertEqual(result, expected, f"Failed for {input_url}")
+    
+    def test_normalize_url_advanced_fallback(self):
+        """Test advanced URL normalization fallback to simple method"""
+        # Test with malformed URL that should fall back to simple normalization
+        with patch.object(self.deduplicator, 'normalize_url_simple', return_value='fallback_result') as mock_simple:
+            # This should trigger the exception and fallback
+            result = self.deduplicator.normalize_url_advanced("not-a-valid-url")
+            mock_simple.assert_called_once_with("not-a-valid-url")
     
     def test_calculate_title_similarity(self):
         """Test title similarity calculation"""
@@ -228,6 +256,164 @@ class TestDocumentDeduplicator(unittest.TestCase):
                 # Check that file write was called
                 mock_open.assert_called_once_with("test_report.json", 'w', encoding='utf-8')
                 mock_json_dump.assert_called_once()
+
+    def test_find_csv_duplicates_advanced(self):
+        """Test advanced CSV duplicate analysis"""
+        import tempfile
+        import csv
+        import os
+        
+        # Create test CSV data
+        test_csv_data = [
+            {
+                'id': '1',
+                'title': 'Python Programming Guide for Beginners',
+                'source_url': 'https://example.com/python-guide?utm_source=twitter',
+                'author': 'John Doe',
+                'notes': '',
+                'tags': 'python,programming',
+                'created_at': '2024-01-01T10:00:00Z',
+                'location': 'new'
+            },
+            {
+                'id': '2',
+                'title': 'Python Programming Tutorial for Beginners',  # High similarity to #1
+                'source_url': 'https://example.com/python-guide?ref=newsletter',  # Same base URL as #1
+                'author': 'Jane Smith',
+                'notes': '',
+                'tags': 'python',
+                'created_at': '2024-01-02T10:00:00Z',
+                'location': 'new'
+            },
+            {
+                'id': '3',
+                'title': 'JavaScript Complete Guide',
+                'source_url': 'https://example.com/js-guide',
+                'author': 'Bob Wilson',
+                'notes': '',
+                'tags': 'javascript',
+                'created_at': '2024-01-03T10:00:00Z',
+                'location': 'new'
+            },
+            {
+                'id': '4',
+                'title': 'JavaScript Comprehensive Guide',  # High similarity to #3
+                'source_url': 'https://different-site.com/js-tutorial',  # Different URL from #3
+                'author': 'Alice Brown',
+                'notes': '',
+                'tags': 'js',
+                'created_at': '2024-01-04T10:00:00Z',
+                'location': 'new'
+            }
+        ]
+        
+        # Create temporary CSV file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=test_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(test_csv_data)
+            temp_csv_path = f.name
+        
+        try:
+            # Test advanced analysis
+            analysis = self.deduplicator.find_csv_duplicates_advanced(temp_csv_path)
+            
+            # Verify analysis structure
+            self.assertIn("csv_file", analysis)
+            self.assertIn("mode", analysis)
+            self.assertIn("total_documents", analysis)
+            self.assertIn("duplicate_groups", analysis)
+            self.assertIn("total_duplicates", analysis)
+            self.assertIn("groups", analysis)
+            self.assertIn("warning", analysis)
+            
+            # Check mode
+            self.assertEqual(analysis["mode"], "advanced")
+            
+            # Check document count
+            self.assertEqual(analysis["total_documents"], 4)
+            
+            # Should find 2 duplicate groups
+            self.assertEqual(analysis["duplicate_groups"], 2)
+            self.assertEqual(analysis["total_duplicates"], 2)
+            
+            # Check groups structure
+            for group in analysis["groups"]:
+                self.assertIn("normalized_url", group)
+                self.assertIn("documents", group)
+                self.assertIn("count", group)
+                self.assertIn("example_urls", group)
+                self.assertIn("example_titles", group)
+                self.assertIn("match_reason", group)
+                self.assertEqual(group["count"], 2)  # Each group should have 2 documents
+            
+        finally:
+            # Clean up
+            os.unlink(temp_csv_path)
+
+    def test_advanced_matching_rules(self):
+        """Test advanced duplicate matching rules"""
+        # Test Rule 1: Title similarity > 50% (regardless of URL)
+        title1 = "Python Programming Guide"
+        title2 = "Python Programming Tutorial"
+        similarity = self.deduplicator.calculate_title_similarity(title1, title2)
+        self.assertGreater(similarity, 0.5, "Should match on title similarity >50%")
+        
+        # Test Rule 2: Same normalized URL + title similarity > 50%
+        url1 = "https://example.com/article?utm_source=twitter"
+        url2 = "https://example.com/article?ref=newsletter"
+        normalized1 = self.deduplicator.normalize_url_advanced(url1)
+        normalized2 = self.deduplicator.normalize_url_advanced(url2)
+        self.assertEqual(normalized1, normalized2, "URLs should normalize to same value")
+        
+        # These titles should have high similarity
+        title3 = "JavaScript Complete Guide"
+        title4 = "JavaScript Comprehensive Guide"
+        similarity2 = self.deduplicator.calculate_title_similarity(title3, title4)
+        self.assertGreater(similarity2, 0.5, "Should have sufficient title similarity")
+
+    def test_advanced_csv_export(self):
+        """Test advanced mode CSV export with extra fields"""
+        # Mock analysis data with advanced mode
+        analysis_data = {
+            "csv_file": "test.csv",
+            "mode": "advanced",
+            "total_documents": 4,
+            "duplicate_groups": 1,
+            "total_duplicates": 1,
+            "groups": [{
+                "normalized_url": "example.com/article",
+                "documents": [
+                    {"row_number": 1, "data": {"id": "1", "title": "Test Article", "source_url": "https://example.com/article?utm=1"}},
+                    {"row_number": 2, "data": {"id": "2", "title": "Test Article Copy", "source_url": "https://example.com/article?ref=2"}}
+                ],
+                "count": 2,
+                "example_urls": ["https://example.com/article?utm=1", "https://example.com/article?ref=2"],
+                "example_titles": ["Test Article", "Test Article Copy"],
+                "match_reason": "Title similarity: 85%"
+            }],
+            "warning": "Advanced mode warning"
+        }
+        
+        with patch('builtins.open', create=True) as mock_open:
+            with patch('csv.DictWriter') as mock_writer_class:
+                mock_writer = Mock()
+                mock_writer_class.return_value = mock_writer
+                
+                filename = self.deduplicator.export_csv_duplicates(analysis_data, "test_advanced.csv")
+                
+                # Check filename
+                self.assertEqual(filename, "test_advanced.csv")
+                
+                # Check that advanced mode fields were included
+                mock_writer_class.assert_called_once()
+                call_args = mock_writer_class.call_args[1]
+                fieldnames = call_args['fieldnames']
+                
+                # Advanced mode should have extra fields
+                self.assertIn('match_reason', fieldnames)
+                self.assertIn('example_urls', fieldnames)
+                self.assertIn('example_titles', fieldnames)
 
 if __name__ == '__main__':
     unittest.main() 

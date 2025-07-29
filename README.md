@@ -169,12 +169,17 @@ python cli.py analyze-csv-duplicates your_file.csv --export duplicates.csv
 python cli.py analyze-csv-duplicates your_file.csv --advanced --export duplicates_advanced.csv
 ```
 
-**Advanced Mode Examples** (URLs considered duplicates):
-- `https://example.com/article?utm_source=twitter`
-- `https://example.com/article?ref=newsletter`  
-- `https://example.com/article#section1`
+**Advanced Mode Rules**:
+1. **Title similarity > 50%** (regardless of URL differences)
+2. **OR: Same URL after removing query strings AND title similarity > 50%**
 
-⚠️ **Advanced Mode Warning**: More aggressive matching - **always review results carefully** before deletion!
+**Advanced Mode Examples**:
+- Articles with similar titles from different sources
+- Same article shared via different tracking URLs:
+  - `https://example.com/article?utm_source=twitter` 
+  - `https://example.com/article?ref=newsletter`
+
+⚠️ **Advanced Mode**: Smarter matching but **always review results carefully** before deletion!
 
 **Step 2: Create Deletion Plan**
 ```bash

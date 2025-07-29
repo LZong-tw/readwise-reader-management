@@ -468,59 +468,98 @@ class DocumentDeduplicator:
         return analysis_result
     
     def find_csv_duplicates_advanced(self, csv_file_path: str) -> Dict[str, Any]:
-        """Advanced duplicate analysis - removes query strings from URLs for more aggressive matching
+        """Advanced duplicate analysis - combines URL normalization with title similarity
         
-        WARNING: This is more aggressive and may group different pages as duplicates.
-        Examples that would be considered duplicates:
-        - https://example.com/article?utm_source=twitter
-        - https://example.com/article?ref=newsletter  
-        - https://example.com/article#section1
+        Rules for advanced duplicate detection:
+        1. Title similarity > 50% (regardless of URL)
+        2. OR: Same URL after removing query strings AND title similarity > 50%
         
-        Always review results carefully before proceeding with deletion.
+        This provides smarter duplicate detection while maintaining safety.
         """
         import csv
         
-        safe_print(f"⚠️  ADVANCED MODE: Analyzing duplicates with query string removal")
+        safe_print(f"🔍 ADVANCED MODE: Analyzing duplicates with smart URL + title matching")
         safe_print(f"File: {csv_file_path}")
-        safe_print(f"This mode is more aggressive - please review results carefully!")
+        safe_print(f"Rules: Title similarity >50% OR (same URL without query + title similarity >50%)")
         
         documents = []
-        url_groups = defaultdict(list)
         
         # Read CSV file
         try:
             with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row_num, row in enumerate(reader, start=1):
-                    documents.append(row)
-                    
-                    # Group by advanced normalized source_url
-                    source_url = row.get('source_url', '').strip()
-                    if source_url:
-                        normalized_url = self.normalize_url_advanced(source_url)
-                        if normalized_url:
-                            url_groups[normalized_url].append({
-                                'row_number': row_num,
-                                'data': row
-                            })
+                    documents.append({
+                        'row_number': row_num,
+                        'data': row
+                    })
         except Exception as e:
             return {"error": f"Failed to read CSV file: {e}"}
         
-        # Find duplicate groups
+        # Find duplicate groups using advanced logic
         duplicate_groups = []
+        processed_indices = set()
         total_duplicates = 0
         
-        for normalized_url, docs in url_groups.items():
-            if len(docs) > 1:
-                # Show example URLs for this group to help user understand the matching
-                example_urls = [doc['data'].get('source_url', '') for doc in docs[:3]]
+        for i, doc1 in enumerate(documents):
+            if i in processed_indices:
+                continue
+                
+            group = [doc1]
+            group_indices = {i}
+            
+            title1 = doc1['data'].get('title', '').strip()
+            url1 = doc1['data'].get('source_url', '').strip()
+            normalized_url1 = self.normalize_url_advanced(url1) if url1 else ""
+            
+            # Find similar documents
+            for j, doc2 in enumerate(documents[i+1:], start=i+1):
+                if j in processed_indices:
+                    continue
+                    
+                title2 = doc2['data'].get('title', '').strip()
+                url2 = doc2['data'].get('source_url', '').strip()
+                normalized_url2 = self.normalize_url_advanced(url2) if url2 else ""
+                
+                is_duplicate = False
+                match_reason = ""
+                
+                # Calculate title similarity
+                title_similarity = self.calculate_title_similarity(title1, title2) if (title1 and title2) else 0.0
+                
+                # Rule 1: High title similarity (>50%)
+                if title_similarity > 0.5:
+                    is_duplicate = True
+                    match_reason = f"Title similarity: {title_similarity:.1%}"
+                
+                # Rule 2: Same normalized URL AND title similarity >50%
+                elif (normalized_url1 and normalized_url2 and 
+                      normalized_url1 == normalized_url2 and 
+                      title_similarity > 0.5):
+                    is_duplicate = True
+                    match_reason = f"Same URL (no query) + title similarity: {title_similarity:.1%}"
+                
+                if is_duplicate:
+                    group.append(doc2)
+                    group_indices.add(j)
+            
+            # Add to duplicate groups if we found duplicates
+            if len(group) > 1:
+                # Create example info for the group
+                example_urls = [doc['data'].get('source_url', '') for doc in group[:3]]
+                example_titles = [doc['data'].get('title', '')[:50] + "..." if len(doc['data'].get('title', '')) > 50 
+                                else doc['data'].get('title', '') for doc in group[:3]]
+                
                 duplicate_groups.append({
-                    'normalized_url': normalized_url,
-                    'documents': docs,
-                    'count': len(docs),
-                    'example_urls': example_urls  # Help user understand what's being grouped
+                    'normalized_url': normalized_url1,  # Representative URL
+                    'documents': group,
+                    'count': len(group),
+                    'example_urls': example_urls,
+                    'example_titles': example_titles,
+                    'match_reason': match_reason  # Why these were grouped
                 })
-                total_duplicates += len(docs) - 1  # Subtract 1 because we keep one
+                total_duplicates += len(group) - 1
+                processed_indices.update(group_indices)
         
         analysis_result = {
             "csv_file": csv_file_path,
@@ -529,11 +568,11 @@ class DocumentDeduplicator:
             "duplicate_groups": len(duplicate_groups),
             "total_duplicates": total_duplicates,
             "groups": duplicate_groups,
-            "warning": "Advanced mode: Query strings and fragments removed. Review carefully before deletion."
+            "warning": "Advanced mode: Smart URL + title similarity matching. Review carefully before deletion."
         }
         
         safe_print(f"Advanced analysis found {len(duplicate_groups)} duplicate groups with {total_duplicates} total duplicates")
-        safe_print(f"⚠️  Remember: This mode groups URLs that differ only in query parameters")
+        safe_print(f"📊 Used smart matching: title similarity >50% OR same URL (no query) + title similarity >50%")
         
         return analysis_result
     
@@ -548,19 +587,28 @@ class DocumentDeduplicator:
         
         try:
             with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-                # Add example_urls field for advanced mode
+                # Add extra fields for advanced mode
                 fieldnames = ['group_id', 'normalized_url', 'row_number', 'id', 'title', 'source_url', 'author', 'source', 'notes', 'tags', 'created_at', 'location']
                 if analysis.get("mode") == "advanced":
-                    fieldnames.insert(2, 'example_urls')  # Add after normalized_url
+                    fieldnames.insert(2, 'match_reason')     # Why these were grouped
+                    fieldnames.insert(3, 'example_urls')     # Sample URLs in group
+                    fieldnames.insert(4, 'example_titles')   # Sample titles in group
                 
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
                 
                 for group_id, group in enumerate(analysis['groups'], start=1):
-                    # For advanced mode, show example URLs in the first row of each group
+                    # For advanced mode, prepare additional info
+                    match_reason_str = ""
                     example_urls_str = ""
-                    if analysis.get("mode") == "advanced" and 'example_urls' in group:
-                        example_urls_str = " | ".join(group['example_urls'][:3])
+                    example_titles_str = ""
+                    
+                    if analysis.get("mode") == "advanced":
+                        match_reason_str = group.get('match_reason', '')
+                        if 'example_urls' in group:
+                            example_urls_str = " | ".join(group['example_urls'][:3])
+                        if 'example_titles' in group:
+                            example_titles_str = " | ".join(group['example_titles'][:3])
                     
                     for idx, doc_info in enumerate(group['documents']):
                         row_data = doc_info['data']
@@ -579,9 +627,11 @@ class DocumentDeduplicator:
                             'location': row_data.get('location', '')
                         }
                         
-                        # Add example URLs only for the first row of each group in advanced mode
+                        # Add advanced mode fields only for the first row of each group
                         if analysis.get("mode") == "advanced":
+                            output_row['match_reason'] = match_reason_str if idx == 0 else ""
                             output_row['example_urls'] = example_urls_str if idx == 0 else ""
+                            output_row['example_titles'] = example_titles_str if idx == 0 else ""
                         
                         writer.writerow(output_row)
             
