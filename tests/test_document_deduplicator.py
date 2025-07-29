@@ -97,11 +97,13 @@ class TestDocumentDeduplicator(unittest.TestCase):
     
     def test_normalize_url_advanced_fallback(self):
         """Test advanced URL normalization fallback to simple method"""
-        # Test with malformed URL that should fall back to simple normalization
-        with patch.object(self.deduplicator, 'normalize_url_simple', return_value='fallback_result') as mock_simple:
-            # This should trigger the exception and fallback
-            result = self.deduplicator.normalize_url_advanced("not-a-valid-url")
-            mock_simple.assert_called_once_with("not-a-valid-url")
+        # Mock urlparse to raise an exception to trigger fallback
+        with patch('urllib.parse.urlparse', side_effect=Exception("Parse error")):
+            with patch.object(self.deduplicator, 'normalize_url_simple', return_value='fallback_result') as mock_simple:
+                # This should trigger the exception and fallback
+                result = self.deduplicator.normalize_url_advanced("test-url")
+                self.assertEqual(result, 'fallback_result')
+                mock_simple.assert_called_once_with("test-url")
     
     def test_calculate_title_similarity(self):
         """Test title similarity calculation"""

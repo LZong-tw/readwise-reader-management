@@ -157,6 +157,7 @@ class TestReadwiseCLI:
         args.limit = 10
         args.format = 'text'
         args.verbose = False
+        args.no_progress = True  # Add missing no_progress attribute
         
         # Mock the return value to avoid iteration issues
         mock_dependencies['doc_manager'].get_documents.return_value = [
@@ -168,7 +169,8 @@ class TestReadwiseCLI:
         mock_dependencies['doc_manager'].get_documents.assert_called_once_with(
             location='new',
             category='article',
-            limit=10
+            limit=10,
+            show_progress=False  # Include the show_progress parameter
         )
     
     def test_search_documents(self, mock_dependencies):
