@@ -417,5 +417,62 @@ class TestDocumentDeduplicator(unittest.TestCase):
                 self.assertIn('example_urls', fieldnames)
                 self.assertIn('example_titles', fieldnames)
 
+    def test_advanced_analysis_progress_tracking(self):
+        """Test that advanced analysis shows progress messages"""
+        import tempfile
+        import csv
+        import os
+        from unittest.mock import patch
+        
+        # Create test data with enough documents to trigger progress messages
+        test_csv_data = []
+        for i in range(120):  # Create 120 documents to test progress tracking
+            test_csv_data.append({
+                'id': str(i + 1),
+                'title': f'Test Document {i + 1}',
+                'source_url': f'https://example.com/doc{i + 1}',
+                'author': f'Author {i + 1}',
+                'notes': '',
+                'tags': 'test',
+                'created_at': f'2024-01-{(i % 30) + 1:02d}T10:00:00Z',
+                'location': 'new'
+            })
+        
+        # Create temporary CSV file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=test_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(test_csv_data)
+            temp_csv_path = f.name
+        
+        try:
+            # Capture safe_print output to verify progress messages
+            with patch('document_deduplicator.safe_print') as mock_safe_print:
+                # Test advanced analysis
+                analysis = self.deduplicator.find_csv_duplicates_advanced(temp_csv_path)
+                
+                # Verify analysis completed successfully
+                self.assertIn("total_documents", analysis)
+                self.assertEqual(analysis["total_documents"], 120)
+                
+                # Check that progress messages were displayed
+                progress_calls = [call for call in mock_safe_print.call_args_list 
+                                if 'Progress:' in str(call) or 'Processing complete:' in str(call)]
+                
+                # Should have progress messages (at least initial processing message and completion)
+                self.assertGreater(len(progress_calls), 0, "Should display progress messages")
+                
+                # Check for specific progress-related messages
+                all_messages = [str(call) for call in mock_safe_print.call_args_list]
+                processing_messages = [msg for msg in all_messages if 'Processing' in msg and 'documents' in msg]
+                completion_messages = [msg for msg in all_messages if 'Processing complete:' in msg]
+                
+                self.assertGreater(len(processing_messages), 0, "Should show processing start message")
+                self.assertGreater(len(completion_messages), 0, "Should show completion message")
+                
+        finally:
+            # Clean up
+            os.unlink(temp_csv_path)
+
 if __name__ == '__main__':
     unittest.main() 
