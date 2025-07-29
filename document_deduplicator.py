@@ -501,9 +501,16 @@ class DocumentDeduplicator:
         processed_indices = set()
         total_duplicates = 0
         
+        safe_print(f"📊 Processing {len(documents)} documents for advanced duplicate detection...")
+        
         for i, doc1 in enumerate(documents):
             if i in processed_indices:
                 continue
+            
+            # Show progress every 50 documents or at key milestones
+            if i % 50 == 0 or i in [0, len(documents)//4, len(documents)//2, len(documents)*3//4]:
+                progress_percent = (i / len(documents)) * 100
+                safe_print(f"🔄 Progress: {i}/{len(documents)} documents processed ({progress_percent:.1f}%)")
                 
             group = [doc1]
             group_indices = {i}
@@ -560,6 +567,9 @@ class DocumentDeduplicator:
                 })
                 total_duplicates += len(group) - 1
                 processed_indices.update(group_indices)
+        
+        # Final progress update
+        safe_print(f"✅ Processing complete: {len(documents)}/{len(documents)} documents processed (100.0%)")
         
         analysis_result = {
             "csv_file": csv_file_path,
