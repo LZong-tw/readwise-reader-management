@@ -368,7 +368,7 @@ class DocumentDeduplicator:
         return result
     
     def normalize_url_simple(self, url: str) -> str:
-        """Simple URL normalization - remove http/https protocol only"""
+        """Simple URL normalization - remove http/https protocol and trailing slash"""
         if not url:
             return ""
         
@@ -376,9 +376,13 @@ class DocumentDeduplicator:
         
         # Remove http:// and https://
         if url.startswith('https://'):
-            return url[8:]  # Remove 'https://'
+            url = url[8:]  # Remove 'https://'
         elif url.startswith('http://'):
-            return url[7:]   # Remove 'http://'
+            url = url[7:]   # Remove 'http://'
+        
+        # Remove trailing slash
+        if url.endswith('/'):
+            url = url[:-1]
         
         return url
     

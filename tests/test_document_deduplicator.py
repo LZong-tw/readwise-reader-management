@@ -166,7 +166,7 @@ class TestDocumentDeduplicator(unittest.TestCase):
         self.assertEqual(len(duplicates_to_remove), 1)
         self.assertEqual(duplicates_to_remove[0]["id"], "doc2")
     
-    @patch('document_deduplicator.DocumentManager')
+    @patch('document_manager.DocumentManager')
     def test_analyze_duplicates(self, mock_doc_manager_class):
         """Test duplicate analysis functionality"""
         # Set up mock
@@ -191,7 +191,7 @@ class TestDocumentDeduplicator(unittest.TestCase):
         analysis = self.deduplicator.analyze_duplicates([])
         self.assertIn("error", analysis)
     
-    @patch('document_deduplicator.DocumentManager')
+    @patch('document_manager.DocumentManager')
     def test_remove_duplicates_dry_run(self, mock_doc_manager_class):
         """Test deduplication preview mode"""
         # Set up mock
