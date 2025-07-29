@@ -71,6 +71,7 @@ python cli.py export --location archive --output filename.json
 # Duplicate management (CSV-based workflow)
 python cli.py list --format csv  # Export documents to CSV
 python cli.py analyze-csv-duplicates filename.csv --export duplicates.csv
+python cli.py analyze-csv-duplicates filename.csv --advanced --export duplicates_advanced.csv  # Advanced: removes query strings
 python cli.py plan-deletion duplicates.csv --export deletion_plan.csv
 python cli.py plan-deletion duplicates.csv --prefer-newer --export deletion_plan.csv  # Prefer newer documents
 python cli.py execute-deletion deletion_plan.csv --dry-run  # Preview
@@ -84,7 +85,7 @@ python cli.py execute-deletion deletion_plan.csv --execute  # Execute
 - **`config.py`**: Configuration management with API token handling from environment variables or `.readwise_token` file
 - **`readwise_client.py`**: Low-level Readwise Reader API client with all HTTP endpoints
 - **`document_manager.py`**: High-level document operations (add, list, search, update, delete, stats, export)
-- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features and cross-platform signal handling
+- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features, cross-platform signal handling, and advanced URL normalization modes
 - **`tag_manager.py`**: High-level tag operations (list, search, statistics, usage analysis)
 - **`cli.py`**: Command-line interface with argparse-based subcommands
 - **`web_app.py`**: Flask web application providing browser-based interface
@@ -154,6 +155,6 @@ The system supports four document locations:
 
 ## Important Notes
 
-- You should implement tests for all the new features you add.
-- You should implement or modify tests for any breaking changes you make.
+- You should implement tests to existing test suite for all the new features you add.
+- You should implement new tests or modify existing tests for any breaking changes you make.
 - You should check if there were any need to modify README.md or CLAUDE.md when you make changes.

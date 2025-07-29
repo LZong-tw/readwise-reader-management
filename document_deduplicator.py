@@ -386,6 +386,34 @@ class DocumentDeduplicator:
         
         return url
     
+    def normalize_url_advanced(self, url: str) -> str:
+        """Advanced URL normalization - remove protocol, query string, fragment, and trailing slash
+        
+        WARNING: This is more aggressive and may group different pages as duplicates.
+        Use with caution and always review results before deletion.
+        """
+        if not url:
+            return ""
+        
+        try:
+            from urllib.parse import urlparse
+            
+            # Parse the URL
+            parsed = urlparse(url.strip().lower())
+            
+            # Rebuild URL without query string and fragment
+            # Keep only scheme + netloc + path
+            normalized = f"{parsed.netloc}{parsed.path}"
+            
+            # Remove trailing slash
+            if normalized.endswith('/'):
+                normalized = normalized[:-1]
+            
+            return normalized
+        except Exception:
+            # Fallback to simple normalization if parsing fails
+            return self.normalize_url_simple(url)
+    
     def find_csv_duplicates(self, csv_file_path: str) -> Dict[str, Any]:
         """Find duplicates in CSV file based on source_url without http/https"""
         import csv
@@ -439,24 +467,104 @@ class DocumentDeduplicator:
         
         return analysis_result
     
+    def find_csv_duplicates_advanced(self, csv_file_path: str) -> Dict[str, Any]:
+        """Advanced duplicate analysis - removes query strings from URLs for more aggressive matching
+        
+        WARNING: This is more aggressive and may group different pages as duplicates.
+        Examples that would be considered duplicates:
+        - https://example.com/article?utm_source=twitter
+        - https://example.com/article?ref=newsletter  
+        - https://example.com/article#section1
+        
+        Always review results carefully before proceeding with deletion.
+        """
+        import csv
+        
+        safe_print(f"⚠️  ADVANCED MODE: Analyzing duplicates with query string removal")
+        safe_print(f"File: {csv_file_path}")
+        safe_print(f"This mode is more aggressive - please review results carefully!")
+        
+        documents = []
+        url_groups = defaultdict(list)
+        
+        # Read CSV file
+        try:
+            with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row_num, row in enumerate(reader, start=1):
+                    documents.append(row)
+                    
+                    # Group by advanced normalized source_url
+                    source_url = row.get('source_url', '').strip()
+                    if source_url:
+                        normalized_url = self.normalize_url_advanced(source_url)
+                        if normalized_url:
+                            url_groups[normalized_url].append({
+                                'row_number': row_num,
+                                'data': row
+                            })
+        except Exception as e:
+            return {"error": f"Failed to read CSV file: {e}"}
+        
+        # Find duplicate groups
+        duplicate_groups = []
+        total_duplicates = 0
+        
+        for normalized_url, docs in url_groups.items():
+            if len(docs) > 1:
+                # Show example URLs for this group to help user understand the matching
+                example_urls = [doc['data'].get('source_url', '') for doc in docs[:3]]
+                duplicate_groups.append({
+                    'normalized_url': normalized_url,
+                    'documents': docs,
+                    'count': len(docs),
+                    'example_urls': example_urls  # Help user understand what's being grouped
+                })
+                total_duplicates += len(docs) - 1  # Subtract 1 because we keep one
+        
+        analysis_result = {
+            "csv_file": csv_file_path,
+            "mode": "advanced",
+            "total_documents": len(documents),
+            "duplicate_groups": len(duplicate_groups),
+            "total_duplicates": total_duplicates,
+            "groups": duplicate_groups,
+            "warning": "Advanced mode: Query strings and fragments removed. Review carefully before deletion."
+        }
+        
+        safe_print(f"Advanced analysis found {len(duplicate_groups)} duplicate groups with {total_duplicates} total duplicates")
+        safe_print(f"⚠️  Remember: This mode groups URLs that differ only in query parameters")
+        
+        return analysis_result
+    
     def export_csv_duplicates(self, analysis: Dict[str, Any], output_file: Optional[str] = None) -> str:
         """Export duplicate analysis to CSV file"""
         import csv
         
         if not output_file:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"readwise_duplicates_{timestamp}.csv"
+            mode_suffix = "_advanced" if analysis.get("mode") == "advanced" else ""
+            output_file = f"readwise_duplicates{mode_suffix}_{timestamp}.csv"
         
         try:
             with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+                # Add example_urls field for advanced mode
                 fieldnames = ['group_id', 'normalized_url', 'row_number', 'id', 'title', 'source_url', 'author', 'source', 'notes', 'tags', 'created_at', 'location']
+                if analysis.get("mode") == "advanced":
+                    fieldnames.insert(2, 'example_urls')  # Add after normalized_url
+                
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
                 
                 for group_id, group in enumerate(analysis['groups'], start=1):
-                    for doc_info in group['documents']:
+                    # For advanced mode, show example URLs in the first row of each group
+                    example_urls_str = ""
+                    if analysis.get("mode") == "advanced" and 'example_urls' in group:
+                        example_urls_str = " | ".join(group['example_urls'][:3])
+                    
+                    for idx, doc_info in enumerate(group['documents']):
                         row_data = doc_info['data']
-                        writer.writerow({
+                        output_row = {
                             'group_id': group_id,
                             'normalized_url': group['normalized_url'],
                             'row_number': doc_info['row_number'],
@@ -469,7 +577,13 @@ class DocumentDeduplicator:
                             'tags': row_data.get('tags', ''),
                             'created_at': row_data.get('created_at', ''),
                             'location': row_data.get('location', '')
-                        })
+                        }
+                        
+                        # Add example URLs only for the first row of each group in advanced mode
+                        if analysis.get("mode") == "advanced":
+                            output_row['example_urls'] = example_urls_str if idx == 0 else ""
+                        
+                        writer.writerow(output_row)
             
             safe_print(f"Duplicate analysis exported to: {output_file}")
             return output_file

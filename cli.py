@@ -315,8 +315,19 @@ class ReadwiseCLI:
             safe_print("Initializing CSV duplicate analyzer...")
             deduplicator = DocumentDeduplicator(self.client)
             
-            # Analyze CSV file
-            analysis = deduplicator.find_csv_duplicates(args.csv_file)
+            # Choose analysis mode based on --advanced flag
+            if getattr(args, 'advanced', False):
+                safe_print("🔍 Using ADVANCED mode - removing query strings from URLs")
+                safe_print("⚠️  WARNING: This mode is more aggressive and may group different pages as duplicates")
+                safe_print("Examples that would be considered duplicates:")
+                safe_print("  - https://example.com/article?utm_source=twitter")
+                safe_print("  - https://example.com/article?ref=newsletter")
+                safe_print("  - https://example.com/article#section1")
+                safe_print("")
+                analysis = deduplicator.find_csv_duplicates_advanced(args.csv_file)
+            else:
+                # Standard analysis
+                analysis = deduplicator.find_csv_duplicates(args.csv_file)
             
             if analysis.get("error"):
                 safe_print(f"Error: {analysis['error']}")
@@ -624,6 +635,8 @@ def main():
     csv_dedup_parser.add_argument('--verbose', action='store_true',
                                  help='Show detailed duplicate groups')
     csv_dedup_parser.add_argument('--export', help='Export duplicate list to specified CSV file')
+    csv_dedup_parser.add_argument('--advanced', action='store_true',
+                                 help='⚠️  ADVANCED: Remove query strings from URLs (more aggressive matching, review carefully!)')
     
     # Deletion plan analysis
     plan_deletion_parser = subparsers.add_parser('plan-deletion', 

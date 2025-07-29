@@ -162,9 +162,19 @@ python cli.py list  # Auto-creates CSV if >200 results
 # Export your documents to CSV first
 python cli.py list --format csv
 
-# Find duplicates in the CSV file
+# Standard mode: Find duplicates (removes http/https and trailing slash)
 python cli.py analyze-csv-duplicates your_file.csv --export duplicates.csv
+
+# ⚠️  ADVANCED mode: Also removes query strings (more aggressive)
+python cli.py analyze-csv-duplicates your_file.csv --advanced --export duplicates_advanced.csv
 ```
+
+**Advanced Mode Examples** (URLs considered duplicates):
+- `https://example.com/article?utm_source=twitter`
+- `https://example.com/article?ref=newsletter`  
+- `https://example.com/article#section1`
+
+⚠️ **Advanced Mode Warning**: More aggressive matching - **always review results carefully** before deletion!
 
 **Step 2: Create Deletion Plan**
 ```bash
