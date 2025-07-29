@@ -84,7 +84,7 @@ python cli.py execute-deletion deletion_plan.csv --execute  # Execute
 - **`config.py`**: Configuration management with API token handling from environment variables or `.readwise_token` file
 - **`readwise_client.py`**: Low-level Readwise Reader API client with all HTTP endpoints
 - **`document_manager.py`**: High-level document operations (add, list, search, update, delete, stats, export)
-- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features
+- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features and cross-platform signal handling
 - **`tag_manager.py`**: High-level tag operations (list, search, statistics, usage analysis)
 - **`cli.py`**: Command-line interface with argparse-based subcommands
 - **`web_app.py`**: Flask web application providing browser-based interface
@@ -148,6 +148,7 @@ The system supports four document locations:
 - Statistics are calculated by aggregating API responses
 - Export functionality saves documents as JSON with timestamps
 - Error handling includes API rate limit and network error recovery
+- Cross-platform signal handling supports graceful interruption on Ctrl+C, terminal close, and window close events
 - Tests mock external API calls to ensure reliable testing without API token
 - Coverage reporting helps maintain code quality and identify untested code paths
 

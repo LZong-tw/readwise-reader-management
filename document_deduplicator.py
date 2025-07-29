@@ -756,15 +756,42 @@ class DocumentDeduplicator:
         successfully_deleted_ids = set()  # Track successfully deleted document IDs
         interrupted = False  # Track if Ctrl+C was pressed
         
-        # Setup signal handler for Ctrl+C
+        # Setup signal handlers for graceful shutdown across platforms
         def signal_handler(signum, frame):
             nonlocal interrupted
             interrupted = True
-            safe_print("\n\n🛑 Ctrl+C detected - gracefully stopping after current document...")
+            
+            # Identify the signal received
+            signal_name = "Unknown signal"
+            if signum == signal.SIGINT:
+                signal_name = "Ctrl+C (SIGINT)"
+            elif signum == signal.SIGTERM:
+                signal_name = "Termination request (SIGTERM)"
+            elif hasattr(signal, 'SIGBREAK') and signum == signal.SIGBREAK:
+                signal_name = "Ctrl+Break or window close (SIGBREAK)"
+            elif hasattr(signal, 'SIGHUP') and signum == signal.SIGHUP:
+                signal_name = "Terminal hangup (SIGHUP)"
+            
+            safe_print(f"\n\n🛑 {signal_name} detected - gracefully stopping after current document...")
             safe_print("⚠️  Please wait for safe completion...")
         
-        # Register signal handler for graceful shutdown
-        original_sigint_handler = signal.signal(signal.SIGINT, signal_handler)
+        # Register signal handlers for graceful shutdown across platforms
+        original_handlers = {}
+        signals_to_handle = [signal.SIGINT, signal.SIGTERM]
+        
+        # Add platform-specific signals
+        if hasattr(signal, 'SIGBREAK'):  # Windows - Ctrl+Break and some window close events
+            signals_to_handle.append(signal.SIGBREAK)
+        if hasattr(signal, 'SIGHUP'):    # Unix/Linux/WSL - terminal hangup/close
+            signals_to_handle.append(signal.SIGHUP)
+        
+        # Register all available signal handlers
+        for sig in signals_to_handle:
+            try:
+                original_handlers[sig] = signal.signal(sig, signal_handler)
+            except (OSError, ValueError) as e:
+                # Some signals might not be available on all platforms
+                safe_print(f"Warning: Could not register handler for signal {sig}: {e}")
         
         try:
             # Process in batches to respect rate limits
@@ -841,8 +868,13 @@ class DocumentDeduplicator:
                     break
         
         finally:
-            # Restore original signal handler
-            signal.signal(signal.SIGINT, original_sigint_handler)
+            # Restore all original signal handlers
+            for sig, original_handler in original_handlers.items():
+                try:
+                    signal.signal(sig, original_handler)
+                except (OSError, ValueError):
+                    # Ignore errors when restoring handlers
+                    pass
         
         # Generate execution report
         completion_status = "INTERRUPTED" if interrupted else "COMPLETED"

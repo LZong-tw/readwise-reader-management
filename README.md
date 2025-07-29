@@ -6,9 +6,10 @@ A comprehensive Readwise Reader API management tool that provides both command-l
 
 - ✅ **Document Management**: Add, list, search, update, delete documents
 - ✅ **Tag Management**: List tags, search tags, get tag statistics
-- ✅ **Duplicate Detection**: CSV-based analysis and smart deletion planning
+- ✅ **Duplicate Detection**: CSV-based analysis and smart deletion planning with graceful interruption
 - ✅ **Multiple Interfaces**: Command Line Interface (CLI) and Web Interface
 - ✅ **Export**: JSON and CSV formats with complete metadata (auto-export for large sets)
+- ✅ **Cross-platform Safety**: Graceful interruption and resume support (Ctrl+C, window close, terminal close)
 - ✅ **Testing**: Comprehensive unit test coverage
 
 ## Prerequisites
@@ -189,6 +190,21 @@ python cli.py execute-deletion deletion_plan.csv --execute
 python cli.py execute-deletion deletion_plan.csv --execute --batch-size 5 --force
 ```
 
+**Graceful Interruption & Resume Support:**
+- **Windows**: Press `Ctrl+C`, `Ctrl+Break`, or close the console window
+- **Linux/WSL/macOS**: Press `Ctrl+C` or close the terminal window  
+- The process will finish the current document deletion safely before stopping
+- **Auto-resume**: Generates updated deletion plan with remaining documents after interruption
+- **Resume execution**: Use the updated plan file to continue where you left off
+
+```bash
+# If interrupted during execution, the system creates an updated plan
+# Example: deletion_plan_updated_20241129_143022.csv
+
+# Resume from where you left off
+python cli.py execute-deletion deletion_plan_updated_20241129_143022.csv --execute
+```
+
 **Priority Rules for Keeping Documents:**
 1. **Documents with NOTES** (if only some have notes)
 2. **Documents with TAGS** (if only some have tags)  
@@ -200,6 +216,8 @@ python cli.py execute-deletion deletion_plan.csv --execute --batch-size 5 --forc
 - **Dry-run mode** (default): Preview deletions without making changes
 - **Confirmation prompts**: Type 'DELETE' to confirm execution
 - **Batch processing**: Respects API rate limits (20 requests/minute for DELETE operations)
+- **Cross-platform graceful interruption**: Supports Ctrl+C, window close, and terminal close events
+- **Resume capability**: Auto-generates updated plans after interruption to continue where you left off
 - **Execution reports**: JSON reports with detailed results
 - **Error handling**: Continues processing even if some deletions fail
 
