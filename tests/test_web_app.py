@@ -158,13 +158,14 @@ class TestWebApp:
             'title': 'Test Document',
             'content': 'Test content'
         }
-        mock_managers['client'].get_document.return_value = mock_document
-        
+        # Use MagicMock to allow any method call
+        mock_managers['client'].get_document = Mock(return_value=mock_document)
+
         with patch('web_app.init_managers', return_value=True):
             web_app.client = mock_managers['client']
-            
+
             response = client.get('/api/documents/12345')
-            
+
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data == mock_document
@@ -287,26 +288,28 @@ class TestWebApp:
             'locations': {'new': 50, 'archive': 50},
             'categories': {'article': 100}
         }
-        mock_managers['doc_manager'].get_statistics.return_value = mock_stats
-        
+        # Use correct method name: get_statistics instead of get_stats
+        mock_managers['doc_manager'].get_statistics = Mock(return_value=mock_stats)
+
         with patch('web_app.init_managers', return_value=True):
             web_app.doc_manager = mock_managers['doc_manager']
-            
+
             response = client.get('/api/statistics')
-            
+
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data == mock_stats
     
     def test_api_error_handling(self, client, mock_managers):
         """Test API error handling"""
-        mock_managers['client'].get_document.side_effect = Exception('API Error')
-        
+        # Use MagicMock to allow any method call
+        mock_managers['client'].get_document = Mock(side_effect=Exception('API Error'))
+
         with patch('web_app.init_managers', return_value=True):
             web_app.client = mock_managers['client']
-            
+
             response = client.get('/api/documents/12345')
-            
+
             assert response.status_code == 500
             data = json.loads(response.data)
             assert 'error' in data

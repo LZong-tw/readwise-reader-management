@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Documents - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<!-- Header with Search and Filters -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h1 class="display-6 fw-bold">
+            <i class="bi bi-file-text"></i> Documents
+        </h1>
+        <p class="text-muted">Browse and manage your collection</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{{ url_for('add_document') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Document
+        </a>
+    </div>
+</div>
+
+<!-- Filters and Search -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('documents') }}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Location</label>
+                    <select name="location" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Locations</option>
+                        <option value="new" {% if current_location == 'new' %}selected{% endif %}>New</option>
+                        <option value="later" {% if current_location == 'later' %}selected{% endif %}>Later</option>
+                        <option value="archive" {% if current_location == 'archive' %}selected{% endif %}>Archive</option>
+                        <option value="feed" {% if current_location == 'feed' %}selected{% endif %}>Feed</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Category</label>
+                    <select name="category" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Categories</option>
+                        <option value="article" {% if current_category == 'article' %}selected{% endif %}>Article</option>
+                        <option value="email" {% if current_category == 'email' %}selected{% endif %}>Email</option>
+                        <option value="pdf" {% if current_category == 'pdf' %}selected{% endif %}>PDF</option>
+                        <option value="epub" {% if current_category == 'epub' %}selected{% endif %}>EPUB</option>
+                        <option value="video" {% if current_category == 'video' %}selected{% endif %}>Video</option>
+                        <option value="tweet" {% if current_category == 'tweet' %}selected{% endif %}>Tweet</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Search</label>
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" placeholder="Search by title..." value="{{ search_term or '' }}">
+                        <button class="btn btn-outline-primary" type="submit">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% if current_location or current_category or search_term %}
+            <div class="mt-3">
+                <a href="{{ url_for('documents') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear Filters
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- Documents List -->
+{% if documents and documents|length > 0 %}
+<div class="row mb-3">
+    <div class="col">
+        <p class="text-muted">
+            <i class="bi bi-info-circle"></i> Found {{ documents|length }} document(s)
+        </p>
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for doc in documents %}
+    <div class="col-12">
+        <div class="card document-card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-9">
+                        <h5 class="card-title mb-2">
+                            <a href="{{ doc.url }}" target="_blank" class="text-decoration-none text-dark">
+                                {{ doc.title or 'Untitled' }}
+                                <i class="bi bi-box-arrow-up-right small text-muted"></i>
+                            </a>
+                        </h5>
+
+                        <div class="text-muted small mb-2">
+                            {% if doc.author %}
+                                <i class="bi bi-person"></i> {{ doc.author }}
+                            {% endif %}
+                            {% if doc.source %}
+                                <i class="bi bi-link-45deg"></i> {{ doc.source }}
+                            {% endif %}
+                            {% if doc.created_at %}
+                                <i class="bi bi-calendar3"></i> {{ doc.created_at|datetime }}
+                            {% endif %}
+                            {% if doc.word_count %}
+                                <i class="bi bi-file-text"></i> {{ doc.word_count }} words
+                            {% endif %}
+                        </div>
+
+                        {% if doc.summary %}
+                        <p class="card-text text-muted small">
+                            {{ doc.summary[:200] }}{% if doc.summary|length > 200 %}...{% endif %}
+                        </p>
+                        {% endif %}
+
+                        {% if doc.tags %}
+                        <div class="mt-2">
+                            {% for tag in doc.tags %}
+                                <span class="badge bg-secondary tag-badge">{{ tag }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-3 text-end">
+                        <div class="mb-2">
+                            <span class="badge bg-{% if doc.location == 'archive' %}success{% elif doc.location == 'later' %}warning{% elif doc.location == 'new' %}info{% else %}secondary{% endif %} px-3 py-2">
+                                {{ doc.location|upper }}
+                            </span>
+                        </div>
+
+                        {% if doc.reading_progress and doc.reading_progress > 0 %}
+                        <div class="mb-3">
+                            <small class="text-muted d-block">Reading Progress</small>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar"
+                                     style="width: {{ (doc.reading_progress * 100)|round|int }}%"
+                                     aria-valuenow="{{ (doc.reading_progress * 100)|round|int }}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                            <small class="text-muted">{{ (doc.reading_progress * 100)|round|int }}%</small>
+                        </div>
+                        {% endif %}
+
+                        <div class="btn-group-vertical w-100" role="group">
+                            <a href="{{ url_for('document_detail', document_id=doc.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    onclick="deleteDocument('{{ doc.id }}', '{{ doc.title|truncate_title(30) }}')">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3">No Documents Found</h4>
+        <p class="text-muted mb-4">
+            {% if search_term or current_location or current_category %}
+                No documents match your filters. Try adjusting your search criteria.
+            {% else %}
+                Your collection is empty. Start by adding your first document.
+            {% endif %}
+        </p>
+        <a href="{{ url_for('add_document') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Document
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteDocument(docId, docTitle) {
+    if (confirm(`Are you sure you want to delete "${docTitle}"?\n\nThis action cannot be undone.`)) {
+        fetch(`/delete_document/${docId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Document deleted successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to delete document'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+}
+</script>
+{% endblock %}

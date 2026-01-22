@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="display-5 fw-bold">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </h1>
+        <p class="text-muted">Overview of your Readwise Reader collection</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+{% if stats %}
+<div class="row g-4 mb-5">
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-label">Total Documents</div>
+                <div class="stat-value">{{ stats.total_documents or 0 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card success">
+            <div class="card-body">
+                <div class="stat-label">Archived</div>
+                <div class="stat-value text-success">{{ stats.by_location.archive or 0 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card warning">
+            <div class="card-body">
+                <div class="stat-label">Read Later</div>
+                <div class="stat-value text-warning">{{ stats.by_location.later or 0 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-label">New</div>
+                <div class="stat-value">{{ stats.by_location.new or 0 }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    No statistics available. Your collection may be empty or there was an error loading data.
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="row mb-5">
+    <div class="col">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-lightning-fill"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('add_document') }}" class="btn btn-outline-primary w-100 py-3">
+                            <i class="bi bi-plus-circle fs-3 d-block mb-2"></i>
+                            Add Document
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('documents') }}" class="btn btn-outline-primary w-100 py-3">
+                            <i class="bi bi-list-ul fs-3 d-block mb-2"></i>
+                            Browse Documents
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('export') }}" class="btn btn-outline-primary w-100 py-3">
+                            <i class="bi bi-download fs-3 d-block mb-2"></i>
+                            Export Collection
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Documents -->
+{% if recent_docs and recent_docs|length > 0 %}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Documents</h5>
+                    <a href="{{ url_for('documents') }}" class="btn btn-sm btn-outline-primary">
+                        View All <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for doc in recent_docs %}
+                    <div class="list-group-item list-group-item-action">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h6 class="mb-1">
+                                    <a href="{{ doc.url }}" target="_blank" class="text-decoration-none text-dark">
+                                        {{ doc.title|truncate_title(60) }}
+                                        <i class="bi bi-box-arrow-up-right small"></i>
+                                    </a>
+                                </h6>
+                                <div class="small text-muted">
+                                    {% if doc.author %}
+                                        <i class="bi bi-person"></i> {{ doc.author }} &middot;
+                                    {% endif %}
+                                    {% if doc.created_at %}
+                                        <i class="bi bi-calendar3"></i> {{ doc.created_at|datetime }}
+                                    {% endif %}
+                                    {% if doc.source %}
+                                        &middot; <i class="bi bi-link-45deg"></i> {{ doc.source }}
+                                    {% endif %}
+                                </div>
+                                {% if doc.tags %}
+                                <div class="mt-2">
+                                    {% for tag in doc.tags[:3] %}
+                                        <span class="badge bg-secondary tag-badge">{{ tag }}</span>
+                                    {% endfor %}
+                                    {% if doc.tags|length > 3 %}
+                                        <span class="badge bg-light text-dark">+{{ doc.tags|length - 3 }} more</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-auto">
+                                <span class="badge bg-{% if doc.location == 'archive' %}success{% elif doc.location == 'later' %}warning{% elif doc.location == 'new' %}info{% else %}secondary{% endif %}">
+                                    {{ doc.location|upper }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
+                <h4 class="mt-3">No Documents Yet</h4>
+                <p class="text-muted mb-4">Start building your reading collection by adding your first document.</p>
+                <a href="{{ url_for('add_document') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-circle"></i> Add Your First Document
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Information Section -->
+<div class="row mt-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-info-circle-fill text-primary"></i> Getting Started</h5>
+                <p class="card-text">This tool helps you manage your Readwise Reader collection with advanced features:</p>
+                <ul>
+                    <li>Organize documents by location and tags</li>
+                    <li>Smart duplicate detection</li>
+                    <li>Bulk operations and exports</li>
+                    <li>Detailed statistics and analytics</li>
+                </ul>
+                <a href="https://github.com/LZong-tw/readwise-reader-management#readme" target="_blank" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-book"></i> Read Documentation
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-tools text-primary"></i> CLI Tools Available</h5>
+                <p class="card-text">For power users, command-line tools are also available:</p>
+                <div class="bg-dark text-light p-3 rounded small">
+                    <code>python cli.py list --location later</code><br>
+                    <code>python cli.py search "keyword"</code><br>
+                    <code>python cli.py analyze-csv-duplicates</code><br>
+                    <code>python cli.py --help</code>
+                </div>
+                <a href="https://github.com/LZong-tw/readwise-reader-management#usage" target="_blank" class="btn btn-sm btn-outline-primary mt-3">
+                    <i class="bi bi-terminal"></i> View CLI Commands
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

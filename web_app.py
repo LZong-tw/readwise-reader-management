@@ -259,6 +259,116 @@ def api_verify():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/documents', methods=['GET'])
+def api_documents_list():
+    """API endpoint to list documents"""
+    if not client:
+        return jsonify({'error': 'Client not initialized'}), 500
+
+    try:
+        location = request.args.get('location')
+        category = request.args.get('category')
+        limit = request.args.get('limit', 50, type=int)
+
+        response = client.list_documents(location=location, category=category, limit=limit)
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/documents/<document_id>', methods=['GET'])
+def api_document_get(document_id):
+    """API endpoint to get a single document"""
+    if not client:
+        return jsonify({'error': 'Client not initialized'}), 500
+
+    try:
+        document = client.get_document(document_id)
+        if document:
+            return jsonify(document)
+        else:
+            return jsonify({'error': 'Document not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/documents/<document_id>', methods=['PATCH'])
+def api_document_update(document_id):
+    """API endpoint to update a document"""
+    if not client:
+        return jsonify({'error': 'Client not initialized'}), 500
+
+    try:
+        data = request.get_json()
+        response = client.update_document(document_id, **data)
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/documents/<document_id>', methods=['DELETE'])
+def api_document_delete(document_id):
+    """API endpoint to delete a document"""
+    if not client:
+        return jsonify({'error': 'Client not initialized'}), 500
+
+    try:
+        success = client.delete_document(document_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Document deleted'})
+        else:
+            return jsonify({'error': 'Failed to delete document'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/tags', methods=['GET'])
+def api_tags_list():
+    """API endpoint to list all tags"""
+    if not client:
+        return jsonify({'error': 'Client not initialized'}), 500
+
+    try:
+        tags = client.get_all_tags()
+        return jsonify(tags)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/save', methods=['POST'])
+def api_save_document():
+    """API endpoint to save a document"""
+    if not client:
+        return jsonify({'error': 'Client not initialized'}), 500
+
+    try:
+        data = request.get_json()
+        response = client.save_document(**data)
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search', methods=['GET'])
+def api_search_documents():
+    """API endpoint to search documents"""
+    if not doc_manager:
+        return jsonify({'error': 'Document manager not initialized'}), 500
+
+    try:
+        query = request.args.get('q', '')
+        location = request.args.get('location')
+        results = doc_manager.search_documents(query, location)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/statistics', methods=['GET'])
+def api_statistics():
+    """API endpoint to get statistics"""
+    if not doc_manager:
+        return jsonify({'error': 'Document manager not initialized'}), 500
+
+    try:
+        stats = doc_manager.get_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Template filters
 @app.template_filter('datetime')
 def datetime_filter(value):

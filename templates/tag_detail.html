@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Tag: {{ tag.name }} - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('tags') }}">Tags</a></li>
+                <li class="breadcrumb-item active">{{ tag.name or tag.key }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<!-- Tag Header -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card shadow">
+            <div class="card-body p-4">
+                <h1 class="display-5 mb-3">
+                    <i class="bi bi-tag-fill text-primary"></i>
+                    {{ tag.name or tag.key }}
+                </h1>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-file-text"></i>
+                    {{ documents|length }} document{{ 's' if documents|length != 1 else '' }} with this tag
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Documents with this Tag -->
+{% if documents and documents|length > 0 %}
+<div class="row g-4">
+    {% for doc in documents %}
+    <div class="col-12">
+        <div class="card document-card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-9">
+                        <h5 class="card-title mb-2">
+                            <a href="{{ doc.url }}" target="_blank" class="text-decoration-none text-dark">
+                                {{ doc.title or 'Untitled' }}
+                                <i class="bi bi-box-arrow-up-right small text-muted"></i>
+                            </a>
+                        </h5>
+
+                        <div class="text-muted small mb-2">
+                            {% if doc.author %}
+                                <i class="bi bi-person"></i> {{ doc.author }}
+                            {% endif %}
+                            {% if doc.source %}
+                                <i class="bi bi-link-45deg"></i> {{ doc.source }}
+                            {% endif %}
+                            {% if doc.created_at %}
+                                <i class="bi bi-calendar3"></i> {{ doc.created_at|datetime }}
+                            {% endif %}
+                        </div>
+
+                        {% if doc.summary %}
+                        <p class="card-text text-muted small">
+                            {{ doc.summary[:200] }}{% if doc.summary|length > 200 %}...{% endif %}
+                        </p>
+                        {% endif %}
+
+                        {% if doc.tags %}
+                        <div class="mt-2">
+                            {% for tag_name in doc.tags %}
+                                <span class="badge bg-{% if tag_name == tag.key or tag_name == tag.name %}primary{% else %}secondary{% endif %} tag-badge">
+                                    {{ tag_name }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-3 text-end">
+                        <div class="mb-2">
+                            <span class="badge bg-{% if doc.location == 'archive' %}success{% elif doc.location == 'later' %}warning{% elif doc.location == 'new' %}info{% else %}secondary{% endif %} px-3 py-2">
+                                {{ doc.location|upper }}
+                            </span>
+                        </div>
+
+                        <div class="btn-group-vertical w-100" role="group">
+                            <a href="{{ url_for('document_detail', document_id=doc.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> View Details
+                            </a>
+                            <a href="{{ doc.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-book-half"></i> Read
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row mt-4">
+    <div class="col text-center">
+        <a href="{{ url_for('tags') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to All Tags
+        </a>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3">No Documents Found</h4>
+        <p class="text-muted mb-4">
+            There are no documents with this tag yet.
+        </p>
+        <div class="d-flex gap-2 justify-content-center">
+            <a href="{{ url_for('add_document') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Document
+            </a>
+            <a href="{{ url_for('tags') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Tags
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

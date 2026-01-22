@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Add Document - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Add New Document</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('add_document') }}">
+                    <!-- URL Field (Required) -->
+                    <div class="mb-4">
+                        <label for="url" class="form-label">
+                            URL <span class="text-danger">*</span>
+                        </label>
+                        <input type="url" class="form-control form-control-lg" id="url" name="url"
+                               placeholder="https://example.com/article"
+                               required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i> Enter the article URL to save
+                        </div>
+                    </div>
+
+                    <!-- Title Field (Optional) -->
+                    <div class="mb-4">
+                        <label for="title" class="form-label">Title (Optional)</label>
+                        <input type="text" class="form-control" id="title" name="title"
+                               placeholder="Article Title">
+                        <div class="form-text">
+                            Leave blank to auto-fetch from the URL
+                        </div>
+                    </div>
+
+                    <!-- Tags Field (Optional) -->
+                    <div class="mb-4">
+                        <label for="tags" class="form-label">Tags (Optional)</label>
+                        <input type="text" class="form-control" id="tags" name="tags"
+                               placeholder="technology, programming, tutorial">
+                        <div class="form-text">
+                            Separate multiple tags with commas
+                        </div>
+                    </div>
+
+                    <!-- Location Field -->
+                    <div class="mb-4">
+                        <label for="location" class="form-label">Location</label>
+                        <select class="form-select" id="location" name="location">
+                            <option value="new" selected>New</option>
+                            <option value="later">Later</option>
+                            <option value="archive">Archive</option>
+                        </select>
+                        <div class="form-text">
+                            Choose where to save this document
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle"></i> Add Document
+                        </button>
+                        <a href="{{ url_for('documents') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-lightbulb"></i> Tips</h6>
+                <ul class="mb-0 small">
+                    <li>Only the URL is required - title and metadata will be auto-fetched</li>
+                    <li>Tags help you organize and find documents later</li>
+                    <li>Use "Later" for articles you want to read soon</li>
+                    <li>Use "Archive" for reference materials</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

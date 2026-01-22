@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Error {{ error_code }} - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-body text-center py-5">
+                <!-- Error Icon and Code -->
+                <div class="mb-4">
+                    {% if error_code == 404 %}
+                        <i class="bi bi-file-earmark-x text-warning" style="font-size: 5rem;"></i>
+                    {% elif error_code == 500 %}
+                        <i class="bi bi-exclamation-triangle text-danger" style="font-size: 5rem;"></i>
+                    {% else %}
+                        <i class="bi bi-exclamation-circle text-danger" style="font-size: 5rem;"></i>
+                    {% endif %}
+                </div>
+
+                <!-- Error Code -->
+                <h1 class="display-1 fw-bold text-muted">{{ error_code or 'Error' }}</h1>
+
+                <!-- Error Message -->
+                <h3 class="mb-3">
+                    {% if error_code == 404 %}
+                        Page Not Found
+                    {% elif error_code == 500 %}
+                        Internal Server Error
+                    {% else %}
+                        An Error Occurred
+                    {% endif %}
+                </h3>
+
+                <p class="text-muted mb-4">
+                    {% if error_message %}
+                        {{ error_message }}
+                    {% elif error_code == 404 %}
+                        The page you're looking for doesn't exist or has been moved.
+                    {% elif error_code == 500 %}
+                        Something went wrong on our end. Please try again later.
+                    {% else %}
+                        We encountered an unexpected error. Please try again.
+                    {% endif %}
+                </p>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 justify-content-center">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="bi bi-house"></i> Go Home
+                    </a>
+                    <button onclick="history.back()" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Go Back
+                    </button>
+                </div>
+
+                <!-- Additional Help -->
+                {% if error_code == 500 %}
+                <div class="mt-4 pt-4 border-top">
+                    <p class="small text-muted mb-2">
+                        <strong>If this problem persists:</strong>
+                    </p>
+                    <ul class="list-unstyled small text-muted">
+                        <li><i class="bi bi-check-circle"></i> Check your API token configuration</li>
+                        <li><i class="bi bi-check-circle"></i> Verify your internet connection</li>
+                        <li><i class="bi bi-check-circle"></i> Review the server logs for details</li>
+                    </ul>
+                    <a href="https://github.com/LZong-tw/readwise-reader-management/issues" target="_blank" class="btn btn-sm btn-outline-secondary mt-2">
+                        <i class="bi bi-bug"></i> Report Issue
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

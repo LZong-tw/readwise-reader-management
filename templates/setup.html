@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}API Setup - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <i class="bi bi-key-fill text-primary" style="font-size: 3rem;"></i>
+                    <h2 class="mt-3">API Token Required</h2>
+                    <p class="text-muted">Configure your Readwise Reader API token to get started</p>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Setup Instructions:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li>Get your API token from <a href="https://readwise.io/access_token" target="_blank">Readwise Access Token</a></li>
+                        <li>Choose one of the methods below to configure your token</li>
+                    </ol>
+                </div>
+
+                <div class="accordion" id="setupAccordion">
+                    <!-- Method 1: Environment Variable -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#method1">
+                                <i class="bi bi-terminal me-2"></i> Method 1: Environment Variable (Recommended)
+                            </button>
+                        </h2>
+                        <div id="method1" class="accordion-collapse collapse show" data-bs-parent="#setupAccordion">
+                            <div class="accordion-body">
+                                <p><strong>Windows (PowerShell):</strong></p>
+                                <div class="bg-dark text-light p-3 rounded mb-3">
+                                    <code>$env:READWISE_TOKEN = "your_api_token_here"</code>
+                                </div>
+
+                                <p><strong>Windows (Command Prompt):</strong></p>
+                                <div class="bg-dark text-light p-3 rounded mb-3">
+                                    <code>set READWISE_TOKEN=your_api_token_here</code>
+                                </div>
+
+                                <p><strong>Linux/macOS:</strong></p>
+                                <div class="bg-dark text-light p-3 rounded">
+                                    <code>export READWISE_TOKEN=your_api_token_here</code>
+                                </div>
+
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <small>After setting the environment variable, restart the web server for changes to take effect.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Method 2: Configuration File -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#method2">
+                                <i class="bi bi-file-text me-2"></i> Method 2: Configuration File
+                            </button>
+                        </h2>
+                        <div id="method2" class="accordion-collapse collapse" data-bs-parent="#setupAccordion">
+                            <div class="accordion-body">
+                                <p>Create a file named <code>.readwise_token</code> in the project root directory:</p>
+
+                                <p><strong>Windows:</strong></p>
+                                <div class="bg-dark text-light p-3 rounded mb-3">
+                                    <code>echo your_api_token_here > .readwise_token</code>
+                                </div>
+
+                                <p><strong>Linux/macOS:</strong></p>
+                                <div class="bg-dark text-light p-3 rounded">
+                                    <code>echo "your_api_token_here" > .readwise_token</code>
+                                </div>
+
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <small>After creating the file, refresh this page to continue.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Method 3: CLI Tool -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#method3">
+                                <i class="bi bi-terminal-fill me-2"></i> Method 3: CLI Tool
+                            </button>
+                        </h2>
+                        <div id="method3" class="accordion-collapse collapse" data-bs-parent="#setupAccordion">
+                            <div class="accordion-body">
+                                <p>Use the command-line tool to save your token:</p>
+                                <div class="bg-dark text-light p-3 rounded mb-3">
+                                    <code>python cli.py setup-token --token your_api_token_here</code>
+                                </div>
+
+                                <div class="alert alert-info mb-0">
+                                    <i class="bi bi-info-circle"></i>
+                                    <small>This will create the <code>.readwise_token</code> file automatically.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 text-center">
+                    <button type="button" class="btn btn-primary btn-lg" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Page
+                    </button>
+                </div>
+
+                <div class="mt-4 text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-shield-check"></i>
+                        Your API token is stored locally and never shared with third parties.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center">
+            <p class="text-muted">
+                Need help? Check the <a href="https://github.com/LZong-tw/readwise-reader-management#installation" target="_blank">installation guide</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

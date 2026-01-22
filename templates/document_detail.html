@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}{{ document.title|truncate_title(50) }} - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('documents') }}">Documents</a></li>
+                <li class="breadcrumb-item active">Document Details</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Main Document Card -->
+        <div class="card shadow mb-4">
+            <div class="card-body p-4">
+                <!-- Title -->
+                <h2 class="card-title mb-3">
+                    {{ document.title or 'Untitled Document' }}
+                </h2>
+
+                <!-- Metadata -->
+                <div class="mb-4">
+                    <div class="row g-3">
+                        {% if document.author %}
+                        <div class="col-auto">
+                            <span class="badge bg-light text-dark">
+                                <i class="bi bi-person"></i> {{ document.author }}
+                            </span>
+                        </div>
+                        {% endif %}
+
+                        {% if document.source %}
+                        <div class="col-auto">
+                            <span class="badge bg-light text-dark">
+                                <i class="bi bi-link-45deg"></i> {{ document.source }}
+                            </span>
+                        </div>
+                        {% endif %}
+
+                        {% if document.word_count %}
+                        <div class="col-auto">
+                            <span class="badge bg-light text-dark">
+                                <i class="bi bi-file-text"></i> {{ document.word_count }} words
+                            </span>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-auto">
+                            <span class="badge bg-{% if document.location == 'archive' %}success{% elif document.location == 'later' %}warning{% elif document.location == 'new' %}info{% else %}secondary{% endif %}">
+                                <i class="bi bi-folder"></i> {{ document.location|upper }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                {% if document.summary %}
+                <div class="mb-4">
+                    <h5 class="text-muted mb-2">Summary</h5>
+                    <p class="text-muted">{{ document.summary }}</p>
+                </div>
+                {% endif %}
+
+                <!-- Tags -->
+                {% if document.tags %}
+                <div class="mb-4">
+                    <h5 class="text-muted mb-2">Tags</h5>
+                    <div>
+                        {% for tag in document.tags %}
+                            <span class="badge bg-secondary tag-badge">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Reading Progress -->
+                {% if document.reading_progress and document.reading_progress > 0 %}
+                <div class="mb-4">
+                    <h5 class="text-muted mb-2">Reading Progress</h5>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-success" role="progressbar"
+                             style="width: {{ (document.reading_progress * 100)|round|int }}%">
+                            {{ (document.reading_progress * 100)|round|int }}%
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Notes -->
+                {% if document.notes %}
+                <div class="mb-4">
+                    <h5 class="text-muted mb-2">Notes</h5>
+                    <div class="alert alert-info">
+                        <i class="bi bi-sticky"></i> {{ document.notes }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- URL -->
+                <div class="mb-4">
+                    <h5 class="text-muted mb-2">Original URL</h5>
+                    <div class="input-group">
+                        <input type="text" class="form-control" value="{{ document.url }}" readonly>
+                        <a href="{{ document.url }}" target="_blank" class="btn btn-outline-primary">
+                            <i class="bi bi-box-arrow-up-right"></i> Open
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ document.url }}" target="_blank" class="btn btn-primary">
+                        <i class="bi bi-book-half"></i> Read on Readwise
+                    </a>
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="deleteDocument('{{ document.id }}', '{{ document.title|truncate_title(30) }}')">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                    <a href="{{ url_for('documents') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Info Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0 small">
+                    <dt class="col-sm-5">Document ID:</dt>
+                    <dd class="col-sm-7"><code class="small">{{ document.id }}</code></dd>
+
+                    <dt class="col-sm-5">Category:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-light text-dark">{{ document.category|upper }}</span>
+                    </dd>
+
+                    {% if document.created_at %}
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ document.created_at|datetime }}</dd>
+                    {% endif %}
+
+                    {% if document.updated_at %}
+                    <dt class="col-sm-5">Updated:</dt>
+                    <dd class="col-sm-7">{{ document.updated_at|datetime }}</dd>
+                    {% endif %}
+
+                    {% if document.published_date %}
+                    <dt class="col-sm-5">Published:</dt>
+                    <dd class="col-sm-7">{{ document.published_date|datetime }}</dd>
+                    {% endif %}
+
+                    {% if document.first_opened_at %}
+                    <dt class="col-sm-5">First Opened:</dt>
+                    <dd class="col-sm-7">{{ document.first_opened_at|datetime }}</dd>
+                    {% endif %}
+
+                    {% if document.last_opened_at %}
+                    <dt class="col-sm-5">Last Opened:</dt>
+                    <dd class="col-sm-7">{{ document.last_opened_at|datetime }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        <!-- Move to Location Card -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-folder-symlink"></i> Move Document</h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">Change the location of this document:</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-sm btn-outline-primary"
+                            onclick="moveDocument('{{ document.id }}', 'new')"
+                            {% if document.location == 'new' %}disabled{% endif %}>
+                        New
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning"
+                            onclick="moveDocument('{{ document.id }}', 'later')"
+                            {% if document.location == 'later' %}disabled{% endif %}>
+                        Later
+                    </button>
+                    <button class="btn btn-sm btn-outline-success"
+                            onclick="moveDocument('{{ document.id }}', 'archive')"
+                            {% if document.location == 'archive' %}disabled{% endif %}>
+                        Archive
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function moveDocument(docId, location) {
+    if (confirm(`Move this document to "${location}"?`)) {
+        fetch(`/update_document/${docId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'move',
+                location: location
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Document moved successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to move document'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+}
+
+function deleteDocument(docId, docTitle) {
+    if (confirm(`Are you sure you want to delete "${docTitle}"?\n\nThis action cannot be undone.`)) {
+        fetch(`/delete_document/${docId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Document deleted successfully!');
+                window.location.href = '{{ url_for("documents") }}';
+            } else {
+                alert('Error: ' + (data.error || 'Failed to delete document'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+}
+</script>
+{% endblock %}

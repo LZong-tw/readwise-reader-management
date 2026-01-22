@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Tags - Readwise Reader Management{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h1 class="display-6 fw-bold">
+            <i class="bi bi-tags"></i> Tags
+        </h1>
+        <p class="text-muted">Organize and browse your tag collection</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{{ url_for('stats') }}" class="btn btn-outline-primary">
+            <i class="bi bi-graph-up"></i> View Statistics
+        </a>
+    </div>
+</div>
+
+<!-- Search -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('tags') }}">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" name="search" class="form-control"
+                       placeholder="Search tags..." value="{{ search_term or '' }}">
+                <button class="btn btn-primary" type="submit">Search</button>
+                {% if search_term %}
+                <a href="{{ url_for('tags') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tags List -->
+{% if tags and tags|length > 0 %}
+<div class="row mb-3">
+    <div class="col">
+        <p class="text-muted">
+            <i class="bi bi-info-circle"></i> Found {{ tags|length }} tag(s)
+            {% if search_term %}
+                matching "{{ search_term }}"
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<!-- Tags as Cards -->
+<div class="row g-3">
+    {% for tag in tags %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 document-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h5 class="card-title mb-2">
+                            <i class="bi bi-tag-fill text-primary"></i>
+                            {{ tag.name or tag.key }}
+                        </h5>
+                        {% if tag.usage_count is defined and tag.usage_count > 0 %}
+                        <p class="text-muted mb-0 small">
+                            <i class="bi bi-file-text"></i>
+                            {{ tag.usage_count }} document{{ 's' if tag.usage_count != 1 else '' }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <a href="{{ url_for('tag_detail', tag_key=tag.key) }}"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-tags text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3">No Tags Found</h4>
+        <p class="text-muted mb-4">
+            {% if search_term %}
+                No tags match your search "{{ search_term }}". Try a different keyword.
+            {% else %}
+                You don't have any tags yet. Tags are automatically created when you add them to documents.
+            {% endif %}
+        </p>
+        <a href="{{ url_for('add_document') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Document with Tags
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Info Card -->
+<div class="row mt-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-lightbulb"></i> About Tags
+                </h5>
+                <p class="card-text small">
+                    Tags help you organize and categorize your documents. You can add multiple tags to each document, making it easy to find related content later.
+                </p>
+                <ul class="small mb-0">
+                    <li>Tags are case-insensitive</li>
+                    <li>Use commas to separate multiple tags</li>
+                    <li>Popular tags appear in statistics</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-info-circle"></i> Tag Management
+                </h5>
+                <p class="card-text small mb-3">
+                    Currently viewing all your tags. Click on any tag to see all associated documents.
+                </p>
+                <a href="{{ url_for('stats') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-graph-up"></i> View Tag Statistics
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
