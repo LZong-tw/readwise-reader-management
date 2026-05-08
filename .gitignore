@@ -23,12 +23,13 @@ nosetests.xml
 coverage.xml
 *.log
 
-# IDE
+# IDE / tooling caches
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.serena/
 
 # OS
 .DS_Store

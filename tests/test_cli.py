@@ -328,6 +328,150 @@ class TestReadwiseCLI:
         
         mock_dependencies['doc_manager'].get_stats.assert_called_once()
     
+    def _make_csv_dedup_args(self, mode=None, advanced=False):
+        args = Mock()
+        args.csv_file = 'fake.csv'
+        args.verbose = False
+        args.export = None
+        args.mode = mode
+        args.advanced = advanced
+        return args
+
+    def test_analyze_csv_duplicates_default_dispatches_standard(self, mock_dependencies):
+        """No flags → standard analyzer is used"""
+        cli = ReadwiseCLI()
+        with patch('document_deduplicator.DocumentDeduplicator') as MockDedup:
+            instance = MockDedup.return_value
+            instance.find_csv_duplicates.return_value = {
+                'csv_file': 'fake.csv', 'total_documents': 0,
+                'duplicate_groups': 0, 'total_duplicates': 0, 'groups': []
+            }
+
+            cli.analyze_csv_duplicates(self._make_csv_dedup_args())
+
+            instance.find_csv_duplicates.assert_called_once_with('fake.csv')
+            instance.find_csv_duplicates_intermediate.assert_not_called()
+            instance.find_csv_duplicates_advanced.assert_not_called()
+
+    def test_analyze_csv_duplicates_mode_intermediate(self, mock_dependencies):
+        """--mode intermediate dispatches to find_csv_duplicates_intermediate"""
+        cli = ReadwiseCLI()
+        with patch('document_deduplicator.DocumentDeduplicator') as MockDedup:
+            instance = MockDedup.return_value
+            instance.find_csv_duplicates_intermediate.return_value = {
+                'csv_file': 'fake.csv', 'mode': 'intermediate',
+                'total_documents': 0, 'duplicate_groups': 0,
+                'total_duplicates': 0, 'groups': []
+            }
+
+            cli.analyze_csv_duplicates(self._make_csv_dedup_args(mode='intermediate'))
+
+            instance.find_csv_duplicates_intermediate.assert_called_once_with('fake.csv')
+            instance.find_csv_duplicates.assert_not_called()
+            instance.find_csv_duplicates_advanced.assert_not_called()
+
+    def test_analyze_csv_duplicates_legacy_advanced_flag(self, mock_dependencies):
+        """--advanced (without --mode) still routes to advanced analyzer"""
+        cli = ReadwiseCLI()
+        with patch('document_deduplicator.DocumentDeduplicator') as MockDedup:
+            instance = MockDedup.return_value
+            instance.find_csv_duplicates_advanced.return_value = {
+                'csv_file': 'fake.csv', 'mode': 'advanced',
+                'total_documents': 0, 'duplicate_groups': 0,
+                'total_duplicates': 0, 'groups': []
+            }
+
+            cli.analyze_csv_duplicates(self._make_csv_dedup_args(advanced=True))
+
+            instance.find_csv_duplicates_advanced.assert_called_once_with('fake.csv')
+            instance.find_csv_duplicates.assert_not_called()
+            instance.find_csv_duplicates_intermediate.assert_not_called()
+
+    def test_parser_accepts_mode_intermediate(self):
+        """argparse really accepts --mode intermediate and surfaces it on args"""
+        from cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['analyze-csv-duplicates', 'f.csv', '--mode', 'intermediate'])
+        assert args.mode == 'intermediate'
+        assert args.advanced is False
+        assert args.csv_file == 'f.csv'
+
+    def test_parser_rejects_invalid_mode(self):
+        """argparse rejects unsupported mode values"""
+        from cli import build_parser
+        parser = build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(['analyze-csv-duplicates', 'f.csv', '--mode', 'aggressive'])
+
+    def test_parser_help_includes_canonical_advanced_rule(self):
+        """--mode help text must contain the canonical advanced-rule sentence verbatim.
+
+        Pins against docstring drift: the rule lives in
+        document_deduplicator.ADVANCED_RULE_SENTENCE, and both the --mode and
+        --advanced help strings must echo it. We inspect the stored Action.help
+        rather than format_help() so argparse's line-wrapping cannot defeat the
+        substring check.
+        """
+        from cli import build_parser
+        from document_deduplicator import ADVANCED_RULE_SENTENCE
+        subparsers_action = next(
+            action for action in build_parser()._actions
+            if hasattr(action, 'choices') and 'analyze-csv-duplicates' in (action.choices or {})
+        )
+        subparser = subparsers_action.choices['analyze-csv-duplicates']
+        help_by_dest = {a.dest: a.help or '' for a in subparser._actions}
+
+        # Action.help stores the raw template before % formatting, so percent
+        # signs appear as %%. Compare against that escaped form.
+        canonical_escaped = ADVANCED_RULE_SENTENCE.replace('%', '%%')
+        for dest in ('mode', 'advanced'):
+            assert dest in help_by_dest, f'missing --{dest} on subparser'
+            help_text = help_by_dest[dest]
+            assert canonical_escaped in help_text, (dest, help_text)
+            # Legacy AND wording must not leak back in.
+            assert 'AND title' not in help_text, (dest, help_text)
+            assert 'AND same URL' not in help_text, (dest, help_text)
+
+    def test_advanced_mode_banner_includes_canonical_rule(self, mock_dependencies, capsys):
+        """The advanced-mode banner printed at runtime must include the canonical rule sentence."""
+        from document_deduplicator import ADVANCED_RULE_SENTENCE
+        cli = ReadwiseCLI()
+        with patch('document_deduplicator.DocumentDeduplicator') as MockDedup:
+            MockDedup.return_value.find_csv_duplicates_advanced.return_value = {
+                'csv_file': 'fake.csv', 'mode': 'advanced',
+                'total_documents': 0, 'duplicate_groups': 0,
+                'total_duplicates': 0, 'groups': []
+            }
+            cli.analyze_csv_duplicates(self._make_csv_dedup_args(mode='advanced'))
+        banner = capsys.readouterr().out
+        assert ADVANCED_RULE_SENTENCE in banner, banner
+        assert 'AND title' not in banner, banner
+
+    def test_parser_allows_mode_with_legacy_advanced(self):
+        """Both flags can coexist; precedence is enforced at dispatch, not parsing"""
+        from cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(['analyze-csv-duplicates', 'f.csv', '--mode', 'standard', '--advanced'])
+        assert args.mode == 'standard'
+        assert args.advanced is True
+
+    def test_analyze_csv_duplicates_mode_overrides_advanced(self, mock_dependencies):
+        """--mode standard wins even if legacy --advanced is also set"""
+        cli = ReadwiseCLI()
+        with patch('document_deduplicator.DocumentDeduplicator') as MockDedup:
+            instance = MockDedup.return_value
+            instance.find_csv_duplicates.return_value = {
+                'csv_file': 'fake.csv', 'total_documents': 0,
+                'duplicate_groups': 0, 'total_duplicates': 0, 'groups': []
+            }
+
+            cli.analyze_csv_duplicates(
+                self._make_csv_dedup_args(mode='standard', advanced=True)
+            )
+
+            instance.find_csv_duplicates.assert_called_once_with('fake.csv')
+            instance.find_csv_duplicates_advanced.assert_not_called()
+
     @patch('sys.argv', ['cli.py', 'verify'])
     def test_main_function(self, mock_dependencies):
         """Test main function with verify command"""

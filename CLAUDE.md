@@ -71,7 +71,9 @@ python cli.py export --location archive --output filename.json
 # Duplicate management (CSV-based workflow)
 python cli.py list --format csv  # Export documents to CSV
 python cli.py analyze-csv-duplicates filename.csv --export duplicates.csv
-python cli.py analyze-csv-duplicates filename.csv --advanced --export duplicates_advanced.csv  # Advanced: removes query strings
+python cli.py analyze-csv-duplicates filename.csv --mode intermediate --export duplicates_intermediate.csv  # Intermediate: URL match ignoring query strings (no title compare)
+python cli.py analyze-csv-duplicates filename.csv --mode advanced --export duplicates_advanced.csv  # Advanced: title similarity > 50% OR same URL after stripping query string + fragment
+python cli.py analyze-csv-duplicates filename.csv --advanced --export duplicates_advanced.csv  # Backward-compatible alias for --mode advanced
 python cli.py plan-deletion duplicates.csv --export deletion_plan.csv
 python cli.py plan-deletion duplicates.csv --prefer-newer --export deletion_plan.csv  # Prefer newer documents
 python cli.py execute-deletion deletion_plan.csv --dry-run  # Preview
@@ -85,7 +87,7 @@ python cli.py execute-deletion deletion_plan.csv --execute  # Execute
 - **`config.py`**: Configuration management with API token handling from environment variables or `.readwise_token` file
 - **`readwise_client.py`**: Low-level Readwise Reader API client with all HTTP endpoints
 - **`document_manager.py`**: High-level document operations (add, list, search, update, delete, stats, export)
-- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features, cross-platform signal handling, and advanced URL normalization modes
+- **`document_deduplicator.py`**: CSV-based duplicate detection and smart deletion planning with safety features, cross-platform signal handling, and three URL-normalization modes (standard / intermediate / advanced)
 - **`tag_manager.py`**: High-level tag operations (list, search, statistics, usage analysis)
 - **`cli.py`**: Command-line interface with argparse-based subcommands
 - **`web_app.py`**: Flask web application providing browser-based interface
@@ -149,7 +151,7 @@ The system supports four document locations:
 - Statistics are calculated by aggregating API responses
 - Export functionality saves documents as JSON with timestamps
 - Error handling includes API rate limit and network error recovery
-- Cross-platform signal handling supports graceful interruption on Ctrl+C, terminal close, and window close events
+- Cross-platform signal handling supports graceful interruption on `Ctrl+C` (all platforms), `Ctrl+Break` and `SIGTERM` on Windows, and `SIGHUP` (terminal close) on Unix/Linux/macOS. Closing the console window on Windows terminates immediately without cleanup — see README's "Graceful Interruption & Resume Support" section.
 - Tests mock external API calls to ensure reliable testing without API token
 - Coverage reporting helps maintain code quality and identify untested code paths
 
@@ -158,3 +160,4 @@ The system supports four document locations:
 - You should implement tests to existing test suite for all the new features you add.
 - You should implement new tests or modify existing tests for any breaking changes you make.
 - You should check if there were any need to modify README.md or CLAUDE.md when you make changes.
+- You should add a `CHANGELOG.md` entry under `[Unreleased]` for every user-visible change (new features, behavior changes, deprecations, bug fixes). The project follows the [Keep a Changelog](https://keepachangelog.com/) format with `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security` sections.
