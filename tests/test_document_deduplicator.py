@@ -310,7 +310,7 @@ class TestDocumentDeduplicator(unittest.TestCase):
         ]
         
         # Create temporary CSV file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=test_csv_data[0].keys())
             writer.writeheader()
             writer.writerows(test_csv_data)
@@ -352,6 +352,247 @@ class TestDocumentDeduplicator(unittest.TestCase):
         finally:
             # Clean up
             os.unlink(temp_csv_path)
+
+    def test_advanced_match_reason_exact_values(self):
+        """Pin the exact match_reason strings emitted into CSV/JSON.
+
+        Downstream consumers may key off these values. Any change here is a
+        breaking change and must land alongside a CHANGELOG note.
+        """
+        import tempfile
+        import csv
+        import os
+
+        rows = [
+            # Pair A: title-only match (different URL paths, similar titles)
+            {'id': 'A1', 'title': 'Python Programming Guide for Beginners',
+             'source_url': 'https://a.example.com/article-one',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-01T00:00:00Z', 'location': 'new'},
+            {'id': 'A2', 'title': 'Python Programming Guide for Beginnerz',
+             'source_url': 'https://b.example.com/article-two',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-02T00:00:00Z', 'location': 'new'},
+            # Pair B: URL-only match (same path, totally unrelated titles)
+            {'id': 'B1', 'title': 'Quarterly Earnings Report 2024',
+             'source_url': 'https://example.com/cool-piece?utm=x',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-03T00:00:00Z', 'location': 'new'},
+            {'id': 'B2', 'title': 'Knitting Patterns For Cats',
+             'source_url': 'https://example.com/cool-piece?ref=y',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-04T00:00:00Z', 'location': 'new'},
+            # Pair C: both URL and title match
+            {'id': 'C1', 'title': 'Identical Title Here',
+             'source_url': 'https://example.com/both?utm=x',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-05T00:00:00Z', 'location': 'new'},
+            {'id': 'C2', 'title': 'Identical Title Here',
+             'source_url': 'https://example.com/both?ref=y',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-06T00:00:00Z', 'location': 'new'},
+        ]
+
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.csv', delete=False, encoding='utf-8', newline=''
+        ) as f:
+            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+            temp_path = f.name
+
+        try:
+            # Sanity-check the test premise: pair B titles must be below Rule 1
+            # threshold so any URL-only match isn't accidentally a title match.
+            b_sim = self.deduplicator.calculate_title_similarity(
+                rows[2]['title'], rows[3]['title']
+            )
+            self.assertLessEqual(
+                b_sim, 0.5,
+                f"Test premise broken: pair B title similarity {b_sim:.2%} "
+                "exceeds Rule 1 threshold; choose more dissimilar titles."
+            )
+
+            analysis = self.deduplicator.find_csv_duplicates_advanced(temp_path)
+            reasons_by_first_id = {
+                group['documents'][0]['data']['id']: group['match_reason']
+                for group in analysis['groups']
+            }
+
+            # Title-only pair → reason starts with "Title similarity: "
+            self.assertIn('A1', reasons_by_first_id)
+            self.assertTrue(
+                reasons_by_first_id['A1'].startswith('Title similarity: '),
+                reasons_by_first_id['A1']
+            )
+            # URL-only pair → exact "Same URL (no query)"
+            self.assertIn('B1', reasons_by_first_id)
+            self.assertEqual(reasons_by_first_id['B1'], 'Same URL (no query)')
+            # Both → "Same URL (no query) + title similarity: <pct>"
+            self.assertIn('C1', reasons_by_first_id)
+            self.assertTrue(
+                reasons_by_first_id['C1'].startswith('Same URL (no query) + title similarity: '),
+                reasons_by_first_id['C1']
+            )
+        finally:
+            os.unlink(temp_path)
+
+    def test_render_match_reason_collapses_equal_rounded_endpoints(self):
+        """Two distinct similarities that round to the same .1% must collapse.
+
+        Otherwise we emit a meaningless `73.1%–73.1%` form that forces every
+        downstream consumer to handle a degenerate range case.
+        """
+        # Two distinct floats that both render as 73.1%. Sanity-check the
+        # premise inside the test so a future format-spec change fails loudly.
+        a, b = 0.73111, 0.73149
+        self.assertEqual(f"{a:.1%}", "73.1%")
+        self.assertEqual(f"{b:.1%}", "73.1%")
+        rendered = self.deduplicator._render_match_reason(
+            url_only_seen=False,
+            url_and_title_sims=[],
+            title_only_sims=[a, b],
+        )
+        self.assertEqual(rendered, "Title similarity: 73.1%")
+        self.assertNotIn('–', rendered)
+
+        # Sanity: when endpoints round differently, range form is preserved.
+        ranged = self.deduplicator._render_match_reason(
+            url_only_seen=False,
+            url_and_title_sims=[],
+            title_only_sims=[0.60, 0.95],
+        )
+        self.assertIn('–', ranged)
+
+    def test_advanced_match_reason_aggregates_mixed_group(self):
+        """4-doc group: seed matches two title-only members at different similarity
+        percentages and one URL-only member.
+
+        The exported match_reason must:
+        1. Surface BOTH rule categories (so reviewers see every rule that fired).
+        2. Emit each category exactly ONCE — varying similarity percentages must
+           not multiply the title-similarity component (proves cardinality is
+           bounded by category, not by edge).
+        """
+        import tempfile
+        import csv
+        import os
+
+        rows = [
+            # Seed
+            {'id': 'S', 'title': 'Quarterly Operations Review FY2024',
+             'source_url': 'https://example.com/operations-review',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-01T00:00:00Z', 'location': 'new'},
+            # Title-only match #1 — high similarity (just punctuation diff)
+            {'id': 'T1', 'title': 'Quarterly Operations Review FY2024.',
+             'source_url': 'https://other.example.org/some-other-path',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-02T00:00:00Z', 'location': 'new'},
+            # Title-only match #2 — moderate similarity (added suffix word)
+            {'id': 'T2', 'title': 'Quarterly Operations Review FY2024 Summary',
+             'source_url': 'https://yet-another.example.net/p/123',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-03T00:00:00Z', 'location': 'new'},
+            # URL-only match (totally different title, same normalized path)
+            {'id': 'U', 'title': 'Knitting Patterns For Cats',
+             'source_url': 'https://example.com/operations-review?utm=newsletter',
+             'author': '', 'notes': '', 'tags': '',
+             'created_at': '2024-01-04T00:00:00Z', 'location': 'new'},
+        ]
+
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.csv', delete=False, encoding='utf-8', newline=''
+        ) as f:
+            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+            temp_path = f.name
+
+        try:
+            sim_t1 = self.deduplicator.calculate_title_similarity(rows[0]['title'], rows[1]['title'])
+            sim_t2 = self.deduplicator.calculate_title_similarity(rows[0]['title'], rows[2]['title'])
+            sim_u = self.deduplicator.calculate_title_similarity(rows[0]['title'], rows[3]['title'])
+            # Premise: both T1 and T2 fire title rule
+            self.assertGreater(sim_t1, 0.5, f"Test premise: seed/T1 sim {sim_t1:.2%}")
+            self.assertGreater(sim_t2, 0.5, f"Test premise: seed/T2 sim {sim_t2:.2%}")
+            # Premise: T1 and T2 produce different similarity percentages
+            # (otherwise the test wouldn't exercise the cardinality bound)
+            self.assertNotAlmostEqual(sim_t1, sim_t2, places=2,
+                msg=f"Test premise: T1 ({sim_t1:.2%}) and T2 ({sim_t2:.2%}) similarities should differ")
+            # Premise: seed/U is URL-only
+            self.assertLessEqual(sim_u, 0.5, f"Test premise: seed/U sim {sim_u:.2%}")
+
+            analysis = self.deduplicator.find_csv_duplicates_advanced(temp_path)
+            self.assertEqual(analysis['duplicate_groups'], 1)
+            group = analysis['groups'][0]
+            self.assertEqual(group['count'], 4)
+            reasons = group['match_reason'].split(' | ')
+
+            # URL-only category appears exactly once.
+            self.assertEqual(reasons.count('Same URL (no query)'), 1, group['match_reason'])
+            # Title-only category appears exactly once even though TWO edges fed
+            # it at different percentages (this is the cardinality bound).
+            title_reasons = [r for r in reasons if r.startswith('Title similarity: ')]
+            self.assertEqual(len(title_reasons), 1, group['match_reason'])
+            # That single title component must surface BOTH percentages via a
+            # min–max range so reviewers don't lose information.
+            self.assertIn('–', title_reasons[0],
+                f"Expected min–max range when multiple title edges fired: {title_reasons[0]!r}")
+            # Stable order: URL-only must appear before the title component.
+            self.assertLess(reasons.index('Same URL (no query)'),
+                            reasons.index(title_reasons[0]),
+                            f"URL component must precede title component: {group['match_reason']!r}")
+        finally:
+            os.unlink(temp_path)
+
+    def test_advanced_url_only_match_with_different_titles(self):
+        """Advanced Rule 2: same normalized URL must group rows even if titles differ."""
+        import tempfile
+        import csv
+        import os
+
+        rows = [
+            {
+                'id': '1',
+                'title': 'Cool Article: The Definitive Guide',
+                'source_url': 'https://example.com/cool-article?utm=twitter',
+                'author': '', 'notes': '', 'tags': '',
+                'created_at': '2024-01-01T10:00:00Z', 'location': 'new'
+            },
+            {
+                'id': '2',
+                # Completely different surface title (e.g., slug-only fallback) but same URL
+                'title': 'cool-article',
+                'source_url': 'https://example.com/cool-article?ref=newsletter',
+                'author': '', 'notes': '', 'tags': '',
+                'created_at': '2024-01-02T10:00:00Z', 'location': 'new'
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+            temp_path = f.name
+
+        try:
+            # Sanity check: titles are NOT similar enough to trigger Rule 1
+            similarity = self.deduplicator.calculate_title_similarity(
+                rows[0]['title'], rows[1]['title']
+            )
+            self.assertLessEqual(similarity, 0.5,
+                "Test premise broken: titles should not exceed Rule 1 threshold")
+
+            analysis = self.deduplicator.find_csv_duplicates_advanced(temp_path)
+
+            self.assertEqual(analysis["duplicate_groups"], 1,
+                "Same normalized URL should group rows even when titles diverge (Rule 2)")
+            group = analysis["groups"][0]
+            self.assertEqual(group["count"], 2)
+            self.assertIn("Same URL", group["match_reason"])
+        finally:
+            os.unlink(temp_path)
 
     def test_advanced_matching_rules(self):
         """Test advanced duplicate matching rules"""
@@ -439,7 +680,7 @@ class TestDocumentDeduplicator(unittest.TestCase):
             })
         
         # Create temporary CSV file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=test_csv_data[0].keys())
             writer.writeheader()
             writer.writerows(test_csv_data)
@@ -473,6 +714,113 @@ class TestDocumentDeduplicator(unittest.TestCase):
         finally:
             # Clean up
             os.unlink(temp_csv_path)
+
+    def test_find_csv_duplicates_intermediate(self):
+        """Test intermediate CSV duplicate analysis - URL match ignoring query strings"""
+        import tempfile
+        import csv
+        import os
+
+        test_csv_data = [
+            {
+                'id': '1',
+                'title': 'Python Programming Guide for Beginners',
+                'source_url': 'https://example.com/python-guide?utm_source=twitter',
+                'author': 'John Doe',
+                'notes': '',
+                'tags': 'python',
+                'created_at': '2024-01-01T10:00:00Z',
+                'location': 'new'
+            },
+            {
+                'id': '2',
+                'title': 'Totally Different Title Here',
+                'source_url': 'https://example.com/python-guide?ref=newsletter#section-2',
+                'author': 'Jane Smith',
+                'notes': '',
+                'tags': '',
+                'created_at': '2024-01-02T10:00:00Z',
+                'location': 'new'
+            },
+            {
+                'id': '3',
+                'title': 'JavaScript Complete Guide',
+                'source_url': 'https://example.com/js-guide',
+                'author': 'Bob',
+                'notes': '',
+                'tags': 'js',
+                'created_at': '2024-01-03T10:00:00Z',
+                'location': 'new'
+            },
+            {
+                'id': '4',
+                'title': 'JavaScript Comprehensive Guide',
+                'source_url': 'https://different-site.com/js-tutorial',
+                'author': 'Alice',
+                'notes': '',
+                'tags': 'js',
+                'created_at': '2024-01-04T10:00:00Z',
+                'location': 'new'
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=test_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(test_csv_data)
+            temp_csv_path = f.name
+
+        try:
+            analysis = self.deduplicator.find_csv_duplicates_intermediate(temp_csv_path)
+
+            self.assertEqual(analysis["mode"], "intermediate")
+            self.assertEqual(analysis["total_documents"], 4)
+            # Doc1+Doc2 share python-guide URL once query/fragment are stripped.
+            # Doc3 and Doc4 have different paths (and titles aren't compared), so
+            # only one duplicate group is expected.
+            self.assertEqual(analysis["duplicate_groups"], 1)
+            self.assertEqual(analysis["total_duplicates"], 1)
+
+            group = analysis["groups"][0]
+            self.assertEqual(group["count"], 2)
+            doc_ids = {doc["data"]["id"] for doc in group["documents"]}
+            self.assertEqual(doc_ids, {"1", "2"})
+            # Intermediate mode should not emit advanced-only fields.
+            self.assertNotIn("match_reason", group)
+            self.assertNotIn("example_titles", group)
+        finally:
+            os.unlink(temp_csv_path)
+
+    def test_intermediate_mode_export_filename_suffix(self):
+        """Intermediate analyses get an _intermediate suffix when no path is given"""
+        analysis_data = {
+            "csv_file": "input.csv",
+            "mode": "intermediate",
+            "total_documents": 2,
+            "duplicate_groups": 1,
+            "total_duplicates": 1,
+            "groups": [{
+                "normalized_url": "example.com/article",
+                "documents": [
+                    {"row_number": 1, "data": {"id": "1", "title": "T1", "source_url": "https://example.com/article?a=1"}},
+                    {"row_number": 2, "data": {"id": "2", "title": "T2", "source_url": "https://example.com/article?b=2"}}
+                ],
+                "count": 2
+            }]
+        }
+
+        with patch('builtins.open', create=True), \
+             patch('csv.DictWriter') as mock_writer_class:
+            mock_writer_class.return_value = Mock()
+            filename = self.deduplicator.export_csv_duplicates(analysis_data)
+
+        self.assertIn("_intermediate_", filename)
+        # Intermediate exports use the standard fieldnames (no advanced extras).
+        fieldnames = mock_writer_class.call_args[1]['fieldnames']
+        self.assertNotIn('match_reason', fieldnames)
+        self.assertNotIn('example_urls', fieldnames)
+        self.assertNotIn('example_titles', fieldnames)
+
 
 if __name__ == '__main__':
     unittest.main() 

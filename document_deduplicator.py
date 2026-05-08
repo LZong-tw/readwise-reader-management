@@ -8,6 +8,14 @@ import json
 from readwise_client import ReadwiseClient
 from document_manager import safe_print
 
+# Canonical phrasing for advanced-mode rule. Reused by user-facing strings
+# (CLI banner, --mode help, exported analysis warning) and pinned by tests so
+# documentation cannot silently drift away from the implementation.
+ADVANCED_RULE_SENTENCE = (
+    "Title similarity > 50% OR same URL after stripping query string + fragment"
+)
+
+
 class DocumentDeduplicator:
     """Smart document deduplicator - removes duplicates based on content similarity and metadata quality"""
     
@@ -467,20 +475,117 @@ class DocumentDeduplicator:
         
         return analysis_result
     
-    def find_csv_duplicates_advanced(self, csv_file_path: str) -> Dict[str, Any]:
-        """Advanced duplicate analysis - combines URL normalization with title similarity
-        
-        Rules for advanced duplicate detection:
-        1. Title similarity > 50% (regardless of URL)
-        2. OR: Same URL after removing query strings AND title similarity > 50%
-        
-        This provides smarter duplicate detection while maintaining safety.
+    def find_csv_duplicates_intermediate(self, csv_file_path: str) -> Dict[str, Any]:
+        """Intermediate duplicate analysis - group by URL with query strings stripped.
+
+        Sits between standard (literal URL) and advanced (URL + title similarity).
+        Groups documents whose source_url is identical after removing the protocol,
+        query string, fragment, and trailing slash. Title is NOT considered, so
+        documents with similar titles but different URL paths stay separate.
         """
         import csv
-        
+
+        safe_print(f"Analyzing duplicates in CSV file (intermediate mode): {csv_file_path}")
+        safe_print("Rule: same URL after removing query string, fragment, and protocol")
+
+        documents = []
+        url_groups = defaultdict(list)
+
+        try:
+            with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row_num, row in enumerate(reader, start=1):
+                    documents.append(row)
+
+                    source_url = row.get('source_url', '').strip()
+                    if source_url:
+                        normalized_url = self.normalize_url_advanced(source_url)
+                        if normalized_url:
+                            url_groups[normalized_url].append({
+                                'row_number': row_num,
+                                'data': row
+                            })
+        except Exception as e:
+            return {"error": f"Failed to read CSV file: {e}"}
+
+        duplicate_groups = []
+        total_duplicates = 0
+
+        for normalized_url, docs in url_groups.items():
+            if len(docs) > 1:
+                duplicate_groups.append({
+                    'normalized_url': normalized_url,
+                    'documents': docs,
+                    'count': len(docs)
+                })
+                total_duplicates += len(docs) - 1
+
+        analysis_result = {
+            "csv_file": csv_file_path,
+            "mode": "intermediate",
+            "total_documents": len(documents),
+            "duplicate_groups": len(duplicate_groups),
+            "total_duplicates": total_duplicates,
+            "groups": duplicate_groups
+        }
+
+        safe_print(f"Found {len(duplicate_groups)} duplicate groups with {total_duplicates} total duplicates")
+
+        return analysis_result
+
+    @staticmethod
+    def _render_match_reason(
+        url_only_seen: bool,
+        url_and_title_sims: List[float],
+        title_only_sims: List[float],
+    ) -> str:
+        """Render the per-group match_reason aggregate in a stable order.
+
+        Produces at most three components, joined with " | ":
+            "Same URL (no query)"
+            "Same URL (no query) + title similarity: <pct>" or "...: <min%>–<max%>"
+            "Title similarity: <pct>" or "Title similarity: <min%>–<max%>"
+
+        Components are bucketed by rule category, not by display string, so the
+        cardinality of the field is bounded regardless of how many edges fed
+        each bucket. Title-similarity percentages are collapsed to a single
+        value (when one edge fired) or a min–max range (when several did).
+        """
+        def _format_sims(sims: List[float]) -> str:
+            if len(sims) == 1:
+                return f"{sims[0]:.1%}"
+            lo = f"{min(sims):.1%}"
+            hi = f"{max(sims):.1%}"
+            # Collapse to a single value when both endpoints round identically;
+            # otherwise the output emits a meaningless "X%–X%" range form that
+            # downstream consumers would have to handle as a distinct case.
+            return lo if lo == hi else f"{lo}–{hi}"
+
+        parts: List[str] = []
+        if url_only_seen:
+            parts.append("Same URL (no query)")
+        if url_and_title_sims:
+            parts.append(f"Same URL (no query) + title similarity: {_format_sims(url_and_title_sims)}")
+        if title_only_sims:
+            parts.append(f"Title similarity: {_format_sims(title_only_sims)}")
+        return " | ".join(parts)
+
+    def find_csv_duplicates_advanced(self, csv_file_path: str) -> Dict[str, Any]:
+        """Advanced duplicate analysis - combines URL normalization with title similarity
+
+        Rules for advanced duplicate detection:
+        1. Title similarity > 50% (regardless of URL), OR
+        2. Same URL after stripping query string and fragment
+
+        Either rule alone is enough to flag a pair as duplicates. Rule 2 covers
+        cases where titles differ (e.g., one row only has a slug) but the source
+        is the same article behind tracking parameters.
+        """
+        import csv
+
         safe_print(f"🔍 ADVANCED MODE: Analyzing duplicates with smart URL + title matching")
         safe_print(f"File: {csv_file_path}")
-        safe_print(f"Rules: Title similarity >50% OR (same URL without query + title similarity >50%)")
+        safe_print(f"Rules: {ADVANCED_RULE_SENTENCE}")
         
         documents = []
         
@@ -514,56 +619,64 @@ class DocumentDeduplicator:
                 
             group = [doc1]
             group_indices = {i}
-            
+            # Categorize each duplicate edge into one of three buckets. The
+            # rendered match_reason is bounded to at most 3 components, in a
+            # fixed order, regardless of how many edges fed each bucket. Title
+            # similarities are accumulated so we can render a min%–max% range
+            # when several title-only or URL+title edges contributed.
+            url_only_seen = False
+            url_and_title_sims: List[float] = []
+            title_only_sims: List[float] = []
+
             title1 = doc1['data'].get('title', '').strip()
             url1 = doc1['data'].get('source_url', '').strip()
             normalized_url1 = self.normalize_url_advanced(url1) if url1 else ""
-            
+
             # Find similar documents
             for j, doc2 in enumerate(documents[i+1:], start=i+1):
                 if j in processed_indices:
                     continue
-                    
+
                 title2 = doc2['data'].get('title', '').strip()
                 url2 = doc2['data'].get('source_url', '').strip()
                 normalized_url2 = self.normalize_url_advanced(url2) if url2 else ""
-                
-                is_duplicate = False
-                match_reason = ""
-                
+
                 # Calculate title similarity
                 title_similarity = self.calculate_title_similarity(title1, title2) if (title1 and title2) else 0.0
-                
-                # Rule 1: High title similarity (>50%)
+                same_normalized_url = bool(
+                    normalized_url1 and normalized_url2 and normalized_url1 == normalized_url2
+                )
+
+                # Rule 1: High title similarity (>50%) — possibly + URL match
+                # Rule 2: Same normalized URL alone
                 if title_similarity > 0.5:
-                    is_duplicate = True
-                    match_reason = f"Title similarity: {title_similarity:.1%}"
-                
-                # Rule 2: Same normalized URL AND title similarity >50%
-                elif (normalized_url1 and normalized_url2 and 
-                      normalized_url1 == normalized_url2 and 
-                      title_similarity > 0.5):
-                    is_duplicate = True
-                    match_reason = f"Same URL (no query) + title similarity: {title_similarity:.1%}"
-                
-                if is_duplicate:
+                    if same_normalized_url:
+                        url_and_title_sims.append(title_similarity)
+                    else:
+                        title_only_sims.append(title_similarity)
                     group.append(doc2)
                     group_indices.add(j)
-            
+                elif same_normalized_url:
+                    url_only_seen = True
+                    group.append(doc2)
+                    group_indices.add(j)
+
             # Add to duplicate groups if we found duplicates
             if len(group) > 1:
                 # Create example info for the group
                 example_urls = [doc['data'].get('source_url', '') for doc in group[:3]]
-                example_titles = [doc['data'].get('title', '')[:50] + "..." if len(doc['data'].get('title', '')) > 50 
+                example_titles = [doc['data'].get('title', '')[:50] + "..." if len(doc['data'].get('title', '')) > 50
                                 else doc['data'].get('title', '') for doc in group[:3]]
-                
+
                 duplicate_groups.append({
                     'normalized_url': normalized_url1,  # Representative URL
                     'documents': group,
                     'count': len(group),
                     'example_urls': example_urls,
                     'example_titles': example_titles,
-                    'match_reason': match_reason  # Why these were grouped
+                    'match_reason': self._render_match_reason(
+                        url_only_seen, url_and_title_sims, title_only_sims
+                    )
                 })
                 total_duplicates += len(group) - 1
                 processed_indices.update(group_indices)
@@ -578,11 +691,14 @@ class DocumentDeduplicator:
             "duplicate_groups": len(duplicate_groups),
             "total_duplicates": total_duplicates,
             "groups": duplicate_groups,
-            "warning": "Advanced mode: Smart URL + title similarity matching. Review carefully before deletion."
+            "warning": (
+                f"Advanced mode rule: {ADVANCED_RULE_SENTENCE}. "
+                "Review carefully before deletion."
+            )
         }
-        
+
         safe_print(f"Advanced analysis found {len(duplicate_groups)} duplicate groups with {total_duplicates} total duplicates")
-        safe_print(f"📊 Used smart matching: title similarity >50% OR same URL (no query) + title similarity >50%")
+        safe_print(f"📊 Used smart matching: {ADVANCED_RULE_SENTENCE}")
         
         return analysis_result
     
@@ -592,7 +708,8 @@ class DocumentDeduplicator:
         
         if not output_file:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            mode_suffix = "_advanced" if analysis.get("mode") == "advanced" else ""
+            mode = analysis.get("mode")
+            mode_suffix = f"_{mode}" if mode in ("advanced", "intermediate") else ""
             output_file = f"readwise_duplicates{mode_suffix}_{timestamp}.csv"
         
         try:
@@ -942,7 +1059,7 @@ class DocumentDeduplicator:
             elif signum == signal.SIGTERM:
                 signal_name = "Termination request (SIGTERM)"
             elif hasattr(signal, 'SIGBREAK') and signum == signal.SIGBREAK:
-                signal_name = "Ctrl+Break or window close (SIGBREAK)"
+                signal_name = "Ctrl+Break (SIGBREAK)"
             elif hasattr(signal, 'SIGHUP') and signum == signal.SIGHUP:
                 signal_name = "Terminal hangup (SIGHUP)"
             
@@ -954,7 +1071,7 @@ class DocumentDeduplicator:
         signals_to_handle = [signal.SIGINT, signal.SIGTERM]
         
         # Add platform-specific signals
-        if hasattr(signal, 'SIGBREAK'):  # Windows - Ctrl+Break and some window close events
+        if hasattr(signal, 'SIGBREAK'):  # Windows - Ctrl+Break only; window close terminates without delivering a signal
             signals_to_handle.append(signal.SIGBREAK)
         if hasattr(signal, 'SIGHUP'):    # Unix/Linux/WSL - terminal hangup/close
             signals_to_handle.append(signal.SIGHUP)

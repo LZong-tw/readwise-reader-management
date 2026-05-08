@@ -8,7 +8,7 @@ from config import Config
 from readwise_client import ReadwiseClient
 from document_manager import DocumentManager, safe_print
 from tag_manager import TagManager
-from document_deduplicator import DocumentDeduplicator
+from document_deduplicator import DocumentDeduplicator, ADVANCED_RULE_SENTENCE
 
 class ReadwiseCLI:
     """Readwise command line interface"""
@@ -315,16 +315,25 @@ class ReadwiseCLI:
             safe_print("Initializing CSV duplicate analyzer...")
             deduplicator = DocumentDeduplicator(self.client)
             
-            # Choose analysis mode based on --advanced flag
-            if getattr(args, 'advanced', False):
+            # Resolve analysis mode. --mode wins; --advanced is kept as a
+            # backward-compatible alias that maps to --mode advanced.
+            mode = getattr(args, 'mode', None)
+            if not mode:
+                mode = 'advanced' if getattr(args, 'advanced', False) else 'standard'
+
+            if mode == 'advanced':
                 safe_print("🔍 Using ADVANCED mode - Smart URL + title similarity matching")
-                safe_print("⚠️  Rules for advanced duplicate detection:")
-                safe_print("  1. Title similarity > 50% (regardless of URL)")
-                safe_print("  2. OR: Same URL after removing query strings AND title similarity > 50%")
+                safe_print(f"⚠️  Rule (either side alone flags a duplicate): {ADVANCED_RULE_SENTENCE}")
                 safe_print("")
                 safe_print("This mode is smarter but please review results carefully!")
                 safe_print("")
                 analysis = deduplicator.find_csv_duplicates_advanced(args.csv_file)
+            elif mode == 'intermediate':
+                safe_print("🔍 Using INTERMEDIATE mode - URL match ignoring query strings")
+                safe_print("Rule: documents with the same URL after stripping query string + fragment are grouped")
+                safe_print("Title similarity is NOT considered.")
+                safe_print("")
+                analysis = deduplicator.find_csv_duplicates_intermediate(args.csv_file)
             else:
                 # Standard analysis
                 analysis = deduplicator.find_csv_duplicates(args.csv_file)
@@ -528,7 +537,9 @@ class ReadwiseCLI:
             print("Usage: python cli.py setup-token --token YOUR_TOKEN")
             print("Get token: https://readwise.io/access_token")
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """Build the top-level argparse parser. Extracted from main() so tests can
+    drive parsing without invoking the full CLI flow."""
     parser = argparse.ArgumentParser(description="Readwise Reader Management Tool")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
@@ -635,8 +646,19 @@ def main():
     csv_dedup_parser.add_argument('--verbose', action='store_true',
                                  help='Show detailed duplicate groups')
     csv_dedup_parser.add_argument('--export', help='Export duplicate list to specified CSV file')
+    # argparse treats bare % as a format specifier; escape every % in help text.
+    advanced_help = ADVANCED_RULE_SENTENCE.replace('%', '%%')
+    csv_dedup_parser.add_argument('--mode',
+                                 choices=['standard', 'intermediate', 'advanced'],
+                                 default=None,
+                                 help=(
+                                     'Detection mode: standard (lowercase + strip scheme + trailing slash); '
+                                     'intermediate (also strip query + fragment, no title compare); '
+                                     f'advanced ({advanced_help}). '
+                                     'Defaults to standard. Overrides --advanced when both are given.'
+                                 ))
     csv_dedup_parser.add_argument('--advanced', action='store_true',
-                                 help='⚠️  ADVANCED: Smart URL + title similarity matching (title >50% OR same URL without query + title >50%)')
+                                 help=f'Backward-compatible alias for --mode advanced. ⚠️ Rule: {advanced_help}.')
     
     # Deletion plan analysis
     plan_deletion_parser = subparsers.add_parser('plan-deletion', 
@@ -667,7 +689,12 @@ def main():
     
     # Verify connection
     verify_parser = subparsers.add_parser('verify', help='Verify API connection')
-    
+
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
     
     if not args.command:

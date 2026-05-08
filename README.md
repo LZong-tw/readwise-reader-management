@@ -165,19 +165,35 @@ python cli.py list --format csv
 # Standard mode: Find duplicates (removes http/https and trailing slash)
 python cli.py analyze-csv-duplicates your_file.csv --export duplicates.csv
 
-# ⚠️  ADVANCED mode: Also removes query strings (more aggressive)
+# Intermediate mode: Also strips query strings/fragments, but does NOT compare titles
+python cli.py analyze-csv-duplicates your_file.csv --mode intermediate --export duplicates_intermediate.csv
+
+# ⚠️  ADVANCED mode: URL stripping + title-similarity matching (most aggressive)
+python cli.py analyze-csv-duplicates your_file.csv --mode advanced --export duplicates_advanced.csv
+
+# Backward-compatible alias (same as --mode advanced)
 python cli.py analyze-csv-duplicates your_file.csv --advanced --export duplicates_advanced.csv
 ```
 
-**Advanced Mode Rules**:
-1. **Title similarity > 50%** (regardless of URL differences)
-2. **OR: Same URL after removing query strings AND title similarity > 50%**
+**Mode Comparison**:
 
-**Advanced Mode Examples**:
-- Articles with similar titles from different sources
+| Mode | URL handling | Title matching | Notes |
+| --- | --- | --- | --- |
+| `standard` (default) | Lowercase + strip scheme + trailing slash | – | Two URLs that differ only by `?utm=…` are kept separate |
+| `intermediate` | Also strip query string + fragment | – | Catches tracking-parameter duplicates without merging on titles |
+| `advanced` | Same as intermediate | URL match OR title similarity > 50% | Most aggressive — review carefully |
+
+**Advanced Mode Rule** (either side alone flags a duplicate pair): _Title similarity > 50% OR same URL after stripping query string + fragment_
+
+Equivalently:
+1. **Title similarity > 50%** (regardless of URL differences), OR
+2. **Same URL after stripping query string + fragment** (regardless of title)
+
+**Examples where intermediate or advanced helps**:
 - Same article shared via different tracking URLs:
-  - `https://example.com/article?utm_source=twitter` 
+  - `https://example.com/article?utm_source=twitter`
   - `https://example.com/article?ref=newsletter`
+- (Advanced only) Articles with similar titles from different sources
 
 ⚠️ **Advanced Mode**: Smarter matching but **always review results carefully** before deletion!
 
